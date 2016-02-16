@@ -1,3 +1,6 @@
+sudo: required
+dist: trusty
+
 language: cpp
 
 compiler:
@@ -5,7 +8,7 @@ compiler:
 
 before_install:
   - sudo apt-get update -qq
-  - sudo apt-get install make g++ libsdl1.2-dev -y
+  - sudo apt-get install make g++ libsdl2-dev -y
 
 script: make SKIP_BUILD_NUMBER_CALC=1 clean && make SKIP_BUILD_NUMBER_CALC=1 all && ./ja2 -unittests
 
