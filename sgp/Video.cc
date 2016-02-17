@@ -122,7 +122,7 @@ static void GetRGBDistribution();
 
 void InitializeVideoManager(void)
 {
-	DebugMsg(TOPIC_VIDEO, DBG_LEVEL_0, "Initializing the video manager");
+	SLOGD("Video", "Initializing the video manager");
 
 	g_game_window = SDL_CreateWindow(APPLICATION_NAME,
                               SDL_WINDOWPOS_UNDEFINED,
@@ -151,7 +151,7 @@ void InitializeVideoManager(void)
     );
 
     if (ScreenBuffer == NULL) {
-        SLOGD("Topic", "SDL_CreateRGBSurface for ScreenBuffer failed: %s\n", SDL_GetError())
+        SLOGE("Video", "SDL_CreateRGBSurface for ScreenBuffer failed: %s\n", SDL_GetError());
     }
 
     ScreenTexture = SDL_CreateTexture(GameRenderer,
@@ -160,7 +160,7 @@ void InitializeVideoManager(void)
         SCREEN_WIDTH, SCREEN_HEIGHT);
 
     if (ScreenTexture == NULL) {
-        SLOGD("Topic", "SDL_CreateTexture for ScreenTexture failed: %s\n", SDL_GetError())
+        SLOGE("Video", "SDL_CreateTexture for ScreenTexture failed: %s\n", SDL_GetError());
     }
 
 
@@ -170,7 +170,7 @@ void InitializeVideoManager(void)
 	);
 
 	if (FrameBuffer == NULL) {
-        SLOGD("Topic", "SDL_CreateRGBSurface for FrameBuffer failed: %s\n", SDL_GetError())
+        SLOGE("Video", "SDL_CreateRGBSurface for FrameBuffer failed: %s\n", SDL_GetError());
     }
 
 	MouseCursor = SDL_CreateRGBSurface(
@@ -180,7 +180,7 @@ void InitializeVideoManager(void)
 	SDL_SetColorKey(MouseCursor, SDL_TRUE, 0);
 
 	if (MouseCursor == NULL) {
-        SLOGD("Topic", "SDL_CreateRGBSurface for MouseCursor failed: %s\n", SDL_GetError())
+        SLOGE("Video", "SDL_CreateRGBSurface for MouseCursor failed: %s\n", SDL_GetError());
     }
 
 	SDL_ShowCursor(SDL_DISABLE);
@@ -200,7 +200,7 @@ void InitializeVideoManager(void)
 
 void ShutdownVideoManager(void)
 {
-	DebugMsg(TOPIC_VIDEO, DBG_LEVEL_0, "Shutting down the video manager");
+	SLOGD("Video", "Shutting down the video manager");
 
 	/* Toggle the state of the video manager to indicate to the refresh thread
 	 * that it needs to shut itself down */
@@ -911,7 +911,7 @@ void InitializeVideoSurfaceManager(void)
 
 void ShutdownVideoSurfaceManager(void)
 {
-  DebugMsg(TOPIC_VIDEOSURFACE, DBG_LEVEL_0, "Shutting down the Video Surface manager");
+  SLOGD("Video", "Shutting down the Video Surface manager");
 
 	// Delete primary viedeo surfaces
 	DeletePrimaryVideoSurfaces();
