@@ -84,7 +84,6 @@ static SDL_Renderer*  GameRenderer;
 SDL_Window* g_game_window;
 
 static SDL_Surface* ScreenBuffer;
-static SDL_Texture* ScreenTexture;
 static Uint32       g_window_flags = SDL_WINDOW_OPENGL;
 
 
@@ -129,16 +128,16 @@ void InitializeVideoManager(void)
                               SDL_WINDOWPOS_UNDEFINED,
                               SCREEN_WIDTH, SCREEN_HEIGHT,
                               g_window_flags);
-    GameRenderer = SDL_CreateRenderer(g_game_window, -1, 0);
-    SDL_RenderSetLogicalSize(GameRenderer, SCREEN_WIDTH, SCREEN_HEIGHT);
+	GameRenderer = SDL_CreateRenderer(g_game_window, -1, 0);
+	SDL_RenderSetLogicalSize(GameRenderer, SCREEN_WIDTH, SCREEN_HEIGHT);
 
 
-    ClippingRect.set(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+  ClippingRect.set(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-    Uint32 Rmask = 0xF800;
-    Uint32 Gmask = 0x07E0;
-    Uint32 Bmask = 0x001F;
-    Uint32 Amask = 0;
+  Uint32 Rmask = 0xF800;
+  Uint32 Gmask = 0x07E0;
+  Uint32 Bmask = 0x001F;
+  Uint32 Amask = 0;
 	ScreenBuffer = SDL_CreateRGBSurface(
 	           0,
 	           SCREEN_WIDTH,
@@ -148,30 +147,22 @@ void InitializeVideoManager(void)
                Gmask,
                Bmask,
                Amask
-    );
+  );
 
-    if (ScreenBuffer == NULL) {
-        SLOGE("Video", "SDL_CreateRGBSurface for ScreenBuffer failed: %s\n", SDL_GetError());
-    }
-
-    ScreenTexture = SDL_CreateTexture(GameRenderer,
-        SDL_PIXELFORMAT_RGB565,
-        SDL_TEXTUREACCESS_STREAMING,
-        SCREEN_WIDTH, SCREEN_HEIGHT);
-
-    if (ScreenTexture == NULL) {
-        SLOGE("Video", "SDL_CreateTexture for ScreenTexture failed: %s\n", SDL_GetError());
-    }
-
+  if (ScreenBuffer == NULL)
+	{
+  	SLOGE("Video", "SDL_CreateRGBSurface for ScreenBuffer failed: %s\n", SDL_GetError());
+  }
 
 	FrameBuffer = SDL_CreateRGBSurface(
 		SDL_SWSURFACE, SCREEN_WIDTH, SCREEN_HEIGHT, PIXEL_DEPTH,
 		Rmask, Gmask, Bmask, Amask
 	);
 
-	if (FrameBuffer == NULL) {
-        SLOGE("Video", "SDL_CreateRGBSurface for FrameBuffer failed: %s\n", SDL_GetError());
-    }
+	if (FrameBuffer == NULL)
+	{
+		SLOGE("Video", "SDL_CreateRGBSurface for FrameBuffer failed: %s\n", SDL_GetError());
+	}
 
 	MouseCursor = SDL_CreateRGBSurface(
 		0, MAX_CURSOR_WIDTH, MAX_CURSOR_HEIGHT, PIXEL_DEPTH,
@@ -179,9 +170,10 @@ void InitializeVideoManager(void)
 	);
 	SDL_SetColorKey(MouseCursor, SDL_TRUE, 0);
 
-	if (MouseCursor == NULL) {
-        SLOGE("Video", "SDL_CreateRGBSurface for MouseCursor failed: %s\n", SDL_GetError());
-    }
+	if (MouseCursor == NULL)
+	{
+		SLOGE("Video", "SDL_CreateRGBSurface for MouseCursor failed: %s\n", SDL_GetError());
+  }
 
 	SDL_ShowCursor(SDL_DISABLE);
 
@@ -455,15 +447,14 @@ static void ScrollJA2Background(INT16 sScrollXIncrement, INT16 sScrollYIncrement
 	// BLIT NEW
 	ExecuteVideoOverlaysToAlternateBuffer(BACKBUFFER);
 
-    SDL_UpdateTexture(ScreenTexture, NULL, ScreenBuffer->pixels, SCREEN_WIDTH * sizeof (Uint16));
-//	SDL_UpdateRect
-//	(
-//		Dest,
-//		gsVIEWPORT_START_X,
-//		gsVIEWPORT_WINDOW_START_Y,
-//		gsVIEWPORT_END_X - gsVIEWPORT_START_X,
-//		gsVIEWPORT_WINDOW_END_Y - gsVIEWPORT_WINDOW_START_Y
-//	);
+	SDL_Texture* screenTexture = SDL_CreateTextureFromSurface(GameRenderer, ScreenBuffer);
+
+	SDL_Rect r;
+	r.x = gsVIEWPORT_START_X;
+	r.y = gsVIEWPORT_WINDOW_START_Y;
+	r.w = gsVIEWPORT_END_X - gsVIEWPORT_START_X;
+	r.h = gsVIEWPORT_WINDOW_END_Y - gsVIEWPORT_WINDOW_START_Y;
+	SDL_RenderCopy(GameRenderer, screenTexture, &r, &r);
 }
 
 
@@ -676,6 +667,10 @@ void RefreshScreen(void)
 		gfPrintFrameBuffer = FALSE;
 	}
 
+#if EXPENSIVE_SDL_UPDATE_RECT
+	SDL_Rect combinedRect = {0, 0, 0, 0};
+#endif
+
 	SGPPoint MousePos;
 	GetMousePos(&MousePos);
 	SDL_Rect src;
@@ -688,18 +683,61 @@ void RefreshScreen(void)
 	dst.y = MousePos.iY - gsMouseCursorYOffset;
 	SDL_BlitSurface(MouseCursor, &src, ScreenBuffer, &dst);
 
-    SDL_UpdateTexture(ScreenTexture, NULL, ScreenBuffer->pixels, SCREEN_WIDTH * sizeof (Uint16));
+	SDL_Texture* screenTexture = SDL_CreateTextureFromSurface(GameRenderer, ScreenBuffer);
 
-    SDL_UpdateTexture(ScreenTexture, &dst, ScreenBuffer->pixels, SCREEN_WIDTH * sizeof (Uint16));
-    SDL_UpdateTexture(ScreenTexture, &MouseBackground, ScreenBuffer->pixels, SCREEN_WIDTH * sizeof (Uint16));
+#if EXPENSIVE_SDL_UPDATE_RECT
+	joinInRectangle(combinedRect, dst);
+  joinInRectangle(combinedRect, MouseBackground);
+#else
+	SDL_RenderCopy(GameRenderer, screenTexture, &dst, &dst);
+	SDL_RenderCopy(GameRenderer, screenTexture, &MouseBackground, &MouseBackground);
+#endif
 
 	MouseBackground = dst;
 
-    SDL_UpdateTexture(ScreenTexture, NULL, ScreenBuffer->pixels, SCREEN_WIDTH * sizeof (Uint16));
+	if (gfForceFullScreenRefresh)
+	{
+		SDL_RenderCopy(GameRenderer, screenTexture, NULL, NULL);
+	}
+	else
+	{
+#if EXPENSIVE_SDL_UPDATE_RECT
+		for(int i = 0; i < guiDirtyRegionCount; i++)
+    {
+      joinInRectangle(combinedRect, DirtyRegions[i]);
+    }
+#else
+		for(int i = 0; i < guiDirtyRegionCount; i++)
+		{
+			SDL_RenderCopy(GameRenderer, screenTexture, &DirtyRegions[i], &DirtyRegions[i]);
+		}
+#endif
+		for (UINT32 i = 0; i < guiDirtyRegionExCount; i++)
+		{
+			SDL_Rect* r = &DirtyRegionsEx[i];
+			if (scrolling)
+			{
+				if (r->y <= gsVIEWPORT_WINDOW_END_Y && r->y + r->h <= gsVIEWPORT_WINDOW_END_Y)
+				{
+					continue;
+				}
+			}
+#if EXPENSIVE_SDL_UPDATE_RECT
+			joinInRectangle(combinedRect, *r);
+#else
+			SDL_RenderCopy(GameRenderer, screenTexture, r, r);
+#endif
+		}
+	}
 
-    SDL_RenderClear(GameRenderer);
-    SDL_RenderCopy(GameRenderer, ScreenTexture, NULL, NULL);
-    SDL_RenderPresent(GameRenderer);
+#if EXPENSIVE_SDL_UPDATE_RECT
+	if((combinedRect.w != 0) && (combinedRect.h != 0))
+  {
+  	SDL_RenderCopy(GameRenderer, screenTexture, &combinedRect, &combinedRect);
+  }
+#endif
+
+	SDL_RenderPresent(GameRenderer);
 
 	gfForceFullScreenRefresh = FALSE;
 	guiDirtyRegionCount = 0;
