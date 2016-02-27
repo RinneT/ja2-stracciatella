@@ -324,8 +324,14 @@ try
 #endif
 
   // init logging
-  SLOG_Init(SLOG_STDERR, "ja2.log");
+  #ifdef __ANDROID__
+    SLOG_Init(SLOG_STDERR, FileMan::joinPaths(SDL_AndroidGetExternalStoragePath(), "ja2.log").c_str());
+  #else
+    SLOG_Init(SLOG_STDERR, "ja2.log");
+  #endif
+
   SLOG_SetLevel(SLOG_WARNING, SLOG_WARNING);
+
 
   setGameVersion(GV_ENGLISH);
 
@@ -380,7 +386,12 @@ try
   std::string configPath = FileMan::joinPaths(configFolderPath, "ja2.ini");
   std::string gameResRootPath = findRootGameResFolder(configPath);
 
-  std::string extraDataDir = EXTRA_DATA_DIR;
+  #ifdef __ANDROID__
+    std::string extraDataDir = SDL_AndroidGetExternalStoragePath();
+  #else
+    std::string extraDataDir = EXTRA_DATA_DIR;
+  #endif
+
   if(extraDataDir.empty())
   {
     // use location of the exe file
@@ -734,15 +745,19 @@ static BOOLEAN ParseParameters(int argc, char* const argv[], CommandLineParams *
 
 static std::string findRootGameResFolder(const std::string &configPath)
 {
-  MicroIni::File configFile;
-  if(!configFile.load(configPath) || !configFile[""].has("data_dir"))
-  {
-    LOG_WARNING("WARNING: Could not open configuration file (\"%s\").\n", configPath.c_str());
-    WriteDefaultConfigFile(configPath.c_str());
-    configFile.load(configPath);
-  }
+  #ifdef __ANDROID__
+    return SDL_AndroidGetExternalStoragePath();
+  #else
+    MicroIni::File configFile;
+    if(!configFile.load(configPath) || !configFile[""].has("data_dir"))
+    {
+      LOG_WARNING("WARNING: Could not open configuration file (\"%s\").\n", configPath.c_str());
+      WriteDefaultConfigFile(configPath.c_str());
+      configFile.load(configPath);
+    }
 
-  return configFile[""]["data_dir"];
+    return configFile[""]["data_dir"];
+  #endif
 }
 
 static void WriteDefaultConfigFile(const char* ConfigFile)

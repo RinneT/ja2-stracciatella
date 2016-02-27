@@ -1,5 +1,6 @@
 #include <stdexcept>
 
+#include "SDL.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -102,6 +103,8 @@ std::string FileMan::findConfigFolderAndSwitchIntoIt()
 	{
 		throw std::runtime_error("Unable to locate home directory\n");
 	}
+#elif __ANDROID__
+	const char* home = SDL_AndroidGetExternalStoragePath();
 #else
 	const char* home = getenv("HOME");
 	if (home == NULL)
@@ -118,6 +121,8 @@ std::string FileMan::findConfigFolderAndSwitchIntoIt()
 
 #ifdef _WIN32
   std::string configFolderPath = FileMan::joinPaths(home, "JA2");
+#elif __ANDROID__
+	std::string configFolderPath = FileMan::joinPaths(home, "config");
 #else
   std::string configFolderPath = FileMan::joinPaths(home, ".ja2");
 #endif
