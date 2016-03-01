@@ -1,5 +1,28 @@
 # History of changes
 
+## next release
+- Fix #80: Broken contract button in strategic view.
+- Fix #88 clipping issue with militia map.
+- Vertically center time compress text in its box.
+- Fix armor label position in strategy merc inventory.
+- Fix ammo label position in weapon detail view.
+- Fix #153: Only heal up Elliot if he is not already dead.
+- Patch from Thomas Moore to fix contract renewal interface freeze
+- Fix #178: Position cash splitting interface correctly in strategic mode.
+- Allow stacked item popup to include multiple lines.
+- Fix: Cow is not a bloodcat
+- Fix: Number of bloodcats on medium difficulty was the same as on hard
+- Fix #200: Dont end up in a locked ui state when somebody leaves.
+- Fix corpses and items appearing in water.
+- Fix #199 (rare boxing crash)
+- Fix #143: crash when loading map
+- Fix #198: end of meanwhile cutscene crash
+- FreeBSD and OpenBSD build system improvements
+
+## v0.14.1
+
+- various build system changes
+
 ## v0.12.352
 
 - In-game video is playable now. Thanks to Misanthropos and Greg Kennedy (author of libsmacker library)
