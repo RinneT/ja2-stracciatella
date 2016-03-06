@@ -274,9 +274,7 @@ static void MainLoop(int msPerGameCycle)
 static int Failure(char const* const msg, bool showInfoIcon=false)
 {
 	fprintf(stderr, "%s\n", msg);
-#if defined _WIN32
-	MessageBox(0, msg, APPLICATION_NAME, MB_OK | (showInfoIcon ? MB_ICONINFORMATION : MB_ICONERROR) | MB_TASKMODAL);
-#endif
+  SDL_ShowSimpleMessageBox(showInfoIcon ? SDL_MESSAGEBOX_INFORMATION : SDL_MESSAGEBOX_ERROR, "Runtime Error", msg, GAME_WINDOW);
 	return EXIT_FAILURE;
 }
 
