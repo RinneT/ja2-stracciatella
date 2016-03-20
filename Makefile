@@ -21,7 +21,9 @@ WITH_UNITTESTS ?= 1
 
 WITH_LPTHREAD ?= 1
 
-BINARY    ?= ja2
+BINARY          ?= ja2
+LAUNCHER_TARGET ?= launcher
+LAUNCHER_BINARY ?= stracciatella-launcher
 
 VERSION := 0.14.xx
 GAME_VERSION := v$(VERSION)
@@ -97,6 +99,7 @@ CFLAGS += -I Build/TileEngine
 CFLAGS += -I Build/Utils
 CFLAGS += -I sgp
 CFLAGS += -I src
+CFLAGS += -I src/launcher
 CFLAGS += -I _build/lib-MicroIni/include
 CFLAGS += -I _build/lib-boost
 CFLAGS += -I _build/lib-rapidjson
@@ -516,10 +519,12 @@ SRCS += src/internals/enums.cc
 SRCS += src/policy/DefaultGamePolicy.cc
 SRCS += src/policy/DefaultIMPPolicy.cc
 
-SRCS += _build/lib-MicroIni/src/MicroIni/File.cpp
-SRCS += _build/lib-MicroIni/src/MicroIni/Line.cpp
-SRCS += _build/lib-MicroIni/src/MicroIni/Section.cpp
-SRCS += _build/lib-MicroIni/src/MicroIni/Value.cpp
+MICRO_INI_SRCS :=
+MICRO_INI_SRCS += _build/lib-MicroIni/src/MicroIni/File.cpp
+MICRO_INI_SRCS += _build/lib-MicroIni/src/MicroIni/Line.cpp
+MICRO_INI_SRCS += _build/lib-MicroIni/src/MicroIni/Section.cpp
+MICRO_INI_SRCS += _build/lib-MicroIni/src/MicroIni/Value.cpp
+SRCS += $(MICRO_INI_SRCS)
 
 SRCS += _build/lib-boost/libs/system/src/error_code.cpp
 SRCS += _build/lib-boost/libs/filesystem/src/codecvt_error_category.cpp
@@ -576,18 +581,46 @@ endif
 OBJS = $(filter %.o, $(SRCS:.c=.o) $(SRCS:.cc=.o) $(SRCS:.cpp=.o))
 DEPS = $(OBJS:.o=.d)
 
+FLUID_BIN = fluid
+FLTK_CONFIG_BIN = fltk-config
+
+FLUID_SRCS :=
+FLUID_SRCS += src/launcher/StracciatellaLauncher.h
+FLUID_SRCS += src/launcher/StracciatellaLauncher.cxx
+
+LAUNCHER_SRCS :=
+LAUNCHER_SRCS += $(MICRO_INI_SRCS)
+LAUNCHER_SRCS += $(FLUID_SRCS)
+LAUNCHER_SRCS += src/launcher/Launcher.cc
+LAUNCHER_SRCS += src/launcher/main.cc
+
+LAUNCHER_OBJS = $(filter %.o, $(LAUNCHER_SRCS:.c=.o) $(LAUNCHER_SRCS:.cc=.o) $(LAUNCHER_SRCS:.cpp=.o) $(LAUNCHER_SRCS:.cxx=.o))
+LAUNCHER_DEPS = $(LAUNCHER_OBJS:.o=.d)
+
+LAUNCHER_CFLAGS := $(shell $(FLTK_CONFIG_BIN) --cxxflags)
+LAUNCHER_LDFLAGS += $(shell $(FLTK_CONFIG_BIN) --ldflags)
+
 .SUFFIXES:
-.SUFFIXES: .c .cc .cpp .d .o
+.SUFFIXES: .c .cc .cpp .cxx .d .o
 
 Q ?= @
 
-all: $(BINARY)
+all: $(BINARY) $(LAUNCHER_TARGET)
 
 -include $(DEPS)
 
 $(BINARY): $(OBJS)
 	@echo '===> LD $@'
 	$(Q)$(CXX) $(CFLAGS) $(OBJS) $(LDFLAGS) -o $@
+
+$(LAUNCHER_BINARY): $(LAUNCHER_OBJS)
+	@echo '===> LD $@'
+	$(Q)$(CXX) $(LAUNCHER_CFLAGS) $(LAUNCHER_OBJS) $(LAUNCHER_LDFLAGS) -o $@
+
+$(LAUNCHER_TARGET):
+	-$(FLUID_BIN) -c src/launcher/StracciatellaLauncher.fl
+	mv StracciatellaLauncher.* src/launcher
+	$(MAKE) $(LAUNCHER_BINARY)
 
 .c.o:
 	@echo '===> CC $<'
@@ -601,15 +634,20 @@ $(BINARY): $(OBJS)
 	@echo '===> CXX $<'
 	$(Q)$(CXX) $(CXXFLAGS) -c -MMD -o $@ $<
 
+.cxx.o:
+	@echo '===> CXX $<'
+	$(Q)$(CXX) $(CXXFLAGS) -c -MMD -o $@ $<
+
 clean distclean:
 	@echo '===> CLEAN'
-	$(Q)rm -fr $(DEPS) $(OBJS) $(BINARY)
+	$(Q)rm -fr $(DEPS) $(OBJS) $(BINARY) $(LAUNCHER_DEPS) $(LAUNCHER_OBJS) $(LAUNCHER_BINARY) $(FLUID_SRCS)
 
 install: $(BINARY)
 	test -z "$(INSTALLABLE)" || install -d $(BINARY_DIR)
 	test -z "$(INSTALLABLE)" || install -d $(MANPAGE_DIR)
 	test -z "$(INSTALLABLE)" || install -d $(FULL_PATH_EXTRA_DATA_DIR)
 	test -z "$(INSTALLABLE)" || install -m 555 $(BINARY) $(BINARY_DIR)
+	test -z "$(INSTALLABLE)" || install -m 555 $(LAUNCHER_BINARY) $(BINARY_DIR)
 	test -z "$(INSTALLABLE)" || cp -R externalized $(FULL_PATH_EXTRA_DATA_DIR)
 	test -z "$(INSTALLABLE)" || cp -R mods         $(FULL_PATH_EXTRA_DATA_DIR)
 	test -z "$(INSTALLABLE)" || cp -R _unittests   $(FULL_PATH_EXTRA_DATA_DIR)
@@ -627,6 +665,7 @@ install: $(BINARY)
 deinstall:
 	test -z "$(INSTALLABLE)" || rm $(MANPAGE_DIR)/ja2.6
 	test -z "$(INSTALLABLE)" || rm $(BINARY_DIR)/$(BINARY)
+	test -z "$(INSTALLABLE)" || rm $(BINARY_DIR)/$(LAUNCHER_BINARY)
 	test -z "$(INSTALLABLE)" || test -d $(FULL_PATH_EXTRA_DATA_DIR)
 	test -z "$(INSTALLABLE)" || rm -rf $(FULL_PATH_EXTRA_DATA_DIR)/externalized
 	test -z "$(INSTALLABLE)" || rm -rf $(FULL_PATH_EXTRA_DATA_DIR)/mods
@@ -673,7 +712,8 @@ build-win-release-on-linux:
 	-rm -rf $(WIN_RELEASE) $(WIN_RELEASE_ZIP)
 	mkdir -p $(WIN_RELEASE)
 	make USE_MINGW=1 MINGW_PREFIX=i686-w64-mingw32 LOCAL_SDL_LIB=_build/lib-SDL-devel-1.2.15-mingw32 WITH_LPTHREAD=0
-	mv ./ja2 $(WIN_RELEASE)/ja2.exe
+	mv ./$(BINARY) $(WIN_RELEASE)/$(BINARY).exe
+	mv ./$(LAUNCHER_BINARY) $(WIN_RELEASE)/$(LAUNCHER_BINARY).exe
 	cp _build/lib-SDL-devel-1.2.15-mingw32/bin/SDL.dll $(WIN_RELEASE)
 	cp _build/distr-files-win/*.bat $(WIN_RELEASE)
 	cp _build/distr-files-win/*.txt $(WIN_RELEASE)
@@ -696,7 +736,8 @@ build-release-on-mac:
 	-rm -rf $(MAC_RELEASE) $(MAC_RELEASE_ZIP)
 	mkdir -p $(MAC_RELEASE)
 	make "CFLAGS_SDL=$(MACOS_STATIC_CFLAGS_SDL)" "LDFLAGS_SDL=$(MACOS_STATIC_LDFLAGS_SDL)"
-	mv ./ja2 $(MAC_RELEASE)/ja2
+	mv ./$(BINARY) $(MAC_RELEASE)/$(BINARY)
+	mv ./$(LAUNCHER_BINARY) $(MAC_RELEASE)/$(LAUNCHER_BINARY)
 	cp _build/distr-files-mac/*.command $(MAC_RELEASE)
 	cp _build/distr-files-mac/*.txt $(MAC_RELEASE)
 	cp -R _unittests $(MAC_RELEASE)

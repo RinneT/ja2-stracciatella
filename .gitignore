@@ -23,3 +23,7 @@ SDL.dll
 stderr.txt
 stdout.txt
 TAGS
+
+stracciatella-launcher
+src/launcher/StracciatellaLauncher.cxx
+src/launcher/StracciatellaLauncher.h
