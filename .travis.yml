@@ -2,6 +2,9 @@ language: cpp
 os:
   - linux
   - osx
+branches:
+  only:
+  - master
 dist: trusty
 sudo: required
 
@@ -16,6 +19,7 @@ before_install:
       export VERSION_TAG="${TRAVIS_PULL_REQUEST}pullrequest";
     fi
   - if [[ "$NIGHTLY_VERSION" != "" ]]; then
+      export BUILD_TYPE="Release";
       export PUBLISH_BINARY="true";
       export PUBLISH_DIR="nightlies";
       export VERSION_TAG="$NIGHTLY_VERSION";

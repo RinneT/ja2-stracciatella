@@ -4,6 +4,10 @@ platform:
   - Win32
   - x64
 
+branches:
+  only:
+    - master
+
 matrix:
   fast_finish: true
 
@@ -23,6 +27,7 @@ init:
         true;
   - ps: >
         if (Test-Path Env:\NIGHTLY_VERSION) {
+          $env:BUILD_TYPE = "Release";
           $env:PUBLISH_BINARY = "true";
           $env:PUBLISH_DIR = "nightlies";
           $env:VERSION_TAG = "${env:NIGHTLY_VERSION}";
@@ -77,7 +82,7 @@ test_script:
   - cmd: ja2-launcher.exe -help
 
 after_test:
-  - ps: if ("$env:PUBLISH_BINARY" -eq "true") { cmake --build c:\projects\ja2-stracciatella\ci-build --target package }
+  - ps: cmake --build c:\projects\ja2-stracciatella\ci-build --target package
   - ps: >
           if ("$env:PUBLISH_BINARY" -eq "true" -and (Test-Path Env:\SFTP_PASSWORD)) {
             $binary_paths = Get-ChildItem c:\projects\ja2-stracciatella\ci-build\ja2-stracciatella_*;
@@ -85,6 +90,9 @@ after_test:
               iex "curl.exe --ftp-create-dirs -T ${file} --ftp-ssl -u ${env:SFTP_USER}:${env:SFTP_PASSWORD} ftp://www61.your-server.de/${env:PUBLISH_DIR}/"
             }
           }
+
+artifacts:
+  - path: ci-build\ja2-stracciatella_*
 
 environment:
   SFTP_USER:
