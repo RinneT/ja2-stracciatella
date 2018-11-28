@@ -49,6 +49,17 @@ option(WITH_FIXMES "Build with fixme messages" OFF)
 option(WITH_MAEMO "Build with right click mapped to F4 (menu button)" OFF)
 option(BUILD_LAUNCHER "Build the ja2 launcher application" ON)
 
+set(EXTERNAL_PROJECT_CMAKE_ARGS
+    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+    -DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}
+    -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+    -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+    -DCMAKE_RC_COMPILER=${CMAKE_RC_COMPILER}
+    -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=${CMAKE_FIND_ROOT_PATH_MODE_PROGRAM}
+    -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=${CMAKE_FIND_ROOT_PATH_MODE_LIBRARY}
+    -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=${CMAKE_FIND_ROOT_PATH_MODE_INCLUDE}
+)
+
 ## Build
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
@@ -120,38 +131,11 @@ if(BUILD_LAUNCHER)
         endif()
     else()
         add_subdirectory("dependencies/lib-fltk")
-        set(FLTK_INCLUDE_DIR "${CMAKE_BINARY_DIR}/lib-fltk/include")
-
-        if (UNIX AND NOT MINGW AND NOT APPLE)
-            set(FLTK_LIBRARIES
-                "${CMAKE_BINARY_DIR}/lib-fltk/lib64/libfltk.a"
-                "${CMAKE_BINARY_DIR}/lib-fltk/lib64/libfltk_images.a"
-                "${CMAKE_BINARY_DIR}/lib-fltk/lib64/libfltk_forms.a"
-                "${CMAKE_BINARY_DIR}/lib-fltk/lib64/libfltk_png.a"
-                "${CMAKE_BINARY_DIR}/lib-fltk/lib64/libfltk_z.a"
-                X11)
-        elseif(APPLE)
-            set(FLTK_LIBRARIES
-                "${CMAKE_BINARY_DIR}/lib-fltk/lib/libfltk.a"
-                "${CMAKE_BINARY_DIR}/lib-fltk/lib/libfltk_images.a"
-                "${CMAKE_BINARY_DIR}/lib-fltk/lib/libfltk_forms.a"
-                "${CMAKE_BINARY_DIR}/lib-fltk/lib/libfltk_png.a"
-                "${CMAKE_BINARY_DIR}/lib-fltk/lib/libfltk_z.a")
-        elseif(MSVC)
-            set(MSVC_LIB_SUFFIX "")
-            if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-                set(MSVC_LIB_SUFFIX "d")
-            endif()
-            set(FLTK_LIBRARIES
-                "${CMAKE_BINARY_DIR}/lib-fltk/lib/fltk${MSVC_LIB_SUFFIX}.lib"
-                "${CMAKE_BINARY_DIR}/lib-fltk/lib/fltk_images${MSVC_LIB_SUFFIX}.lib"
-                "${CMAKE_BINARY_DIR}/lib-fltk/lib/fltk_forms${MSVC_LIB_SUFFIX}.lib"
-                "${CMAKE_BINARY_DIR}/lib-fltk/lib/fltk_png${MSVC_LIB_SUFFIX}.lib"
-                "${CMAKE_BINARY_DIR}/lib-fltk/lib/fltk_z${MSVC_LIB_SUFFIX}.lib")
-        endif()
     endif()
 endif()
 message(STATUS "Fltk Libraries: ${FLTK_LIBRARIES}")
+
+include(./rust/ExternalProject.cmake)
 
 set(JA2_INCLUDES "")
 set(JA2_SOURCES "")
@@ -159,11 +143,10 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/src/externalized")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/src/game")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/src/sgp")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/src/slog")
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/rust")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/dependencies/lib-smacker")
 
 if(BUILD_LAUNCHER)
-    set(LAUNCHER_INCLUDES ${FLTK_INCLUDE_DIR})
+    set(LAUNCHER_INCLUDES ${FLTK_INCLUDE_DIR} ${STRACCIATELLA_INCLUDE_DIR})
     set(LAUNCHER_SOURCES "")
     add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/src/launcher")
 endif()
@@ -174,6 +157,7 @@ include_directories(
     ${Boost_INCLUDE_DIRS}
     ${RAPIDJSON_INCLUDE_DIRS}
     ${SDL2_INCLUDE_DIR}
+    ${STRACCIATELLA_INCLUDE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/lib-smacker/libsmacker
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/lib-utf8cpp/source
 )
@@ -198,12 +182,10 @@ if (WITH_UNITTESTS)
         find_package(GTest REQUIRED)
     else()
         message(STATUS "Compiling with local GTest libraries from ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/lib-gtest")
-        add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/dependencies/lib-gtest")
-        set(GTEST_LIBRARIES "gtest")
-        set(GTEST_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/lib-gtest/include")
+        add_subdirectory("dependencies/lib-gtest")
     endif()
+    message(STATUS "GTest Libraries: ${GTEST_LIBRARIES}")
 
-    set(lib-gtest "${GTEST_LIBRARIES}")
     include_directories(${GTEST_INCLUDE_DIRS})
     add_definitions("-DWITH_UNITTESTS")
 endif()
@@ -212,18 +194,23 @@ set(ADDITIONAL_LIBS "")
 if (UNIX AND NOT MINGW)
     set(ADDITIONAL_LIBS dl pthread)
 elseif(MINGW)
-    set(ADDITIONAL_LIBS shell32 user32 advapi32 ws2_32 userenv shell32 gcc_eh pthread)
+    set(ADDITIONAL_LIBS ws2_32 shell32 advapi32 userenv gcc_eh pthread)
 elseif(MSVC)
     set(ADDITIONAL_LIBS ws2_32 shell32 advapi32 userenv)
 endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CFLAGS}")
 add_executable(${JA2_BINARY} ${JA2_SOURCES})
-target_link_libraries(${JA2_BINARY} ${SDL2_LIBRARY} ${Boost_LIBRARIES} ${lib-gtest} slog smacker rust-stracciatella ${ADDITIONAL_LIBS})
+target_link_libraries(${JA2_BINARY} ${SDL2_LIBRARY} ${Boost_LIBRARIES} ${GTEST_LIBRARIES} slog smacker ${STRACCIATELLA_LIBRARIES} ${ADDITIONAL_LIBS})
+add_dependencies(${JA2_BINARY} libstracciatella)
+if (LOCAL_GTEST_LIB)
+    add_dependencies(${JA2_BINARY} gtest-internal)
+endif()
 
 if(BUILD_LAUNCHER)
     add_executable(${LAUNCHER_BINARY} ${LAUNCHER_SOURCES})
-    target_link_libraries(${LAUNCHER_BINARY} ${FLTK_LIBRARIES} slog rust-stracciatella ${ADDITIONAL_LIBS})
+    target_link_libraries(${LAUNCHER_BINARY} ${FLTK_LIBRARIES} slog ${STRACCIATELLA_LIBRARIES} ${ADDITIONAL_LIBS})
+    add_dependencies(${LAUNCHER_BINARY} libstracciatella)
     if (LOCAL_FLTK_LIB)
         add_dependencies(${LAUNCHER_BINARY} fltk-internal)
     endif()
@@ -304,6 +291,7 @@ elseif(MSVC)
     else()
         set(PACKAGE_ARCH "${PACKAGE_ARCH}32")
     endif()
+    set(PACKAGE_ARCH "${PACKAGE_ARCH}-${MSVC_TOOLSET_VERSION}")
 elseif(APPLE)
     set(PACKAGE_ARCH "macos")
 else()
@@ -366,67 +354,9 @@ if(APPLE)
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/lib-SDL2-2.0.8-macos/SDL2.framework DESTINATION .)
 endif()
 
+## Uninstall
+
 add_custom_templated_target("uninstall")
-
-## Release building
-
-macro(add_vagrant_build_target NAME BOX TARGET ARGS)
-    add_custom_target(${NAME})
-    add_custom_command(TARGET ${NAME}
-            COMMAND vagrant up && vagrant ssh -c "sh /tmp/ja2-stracciatella/release/common/build.sh '${TARGET}' '${ARGS}'" && vagrant halt
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/release/${BOX})
-endmacro(add_vagrant_build_target)
-
-add_vagrant_build_target(
-        "build-deb-package-on-u1404_amd64"
-        "u1404_amd64"
-        "package"
-        "-DCMAKE_INSTALL_PREFIX=/usr -DEXTRA_DATA_DIR=/usr/share/ja2 -DLOCAL_BOOST_LIB=ON -DCPACK_GENERATOR=DEB"
-)
-add_vagrant_build_target(
-        "build-deb-package-on-u1404_i386"
-        "u1404_i386"
-        "package"
-        "-DCMAKE_INSTALL_PREFIX=/usr -DEXTRA_DATA_DIR=/usr/share/ja2 -DLOCAL_BOOST_LIB=ON -DCPACK_GENERATOR=DEB"
-)
-add_vagrant_build_target(
-        "build-win-release-on-u1404_amd64"
-        "u1404_amd64"
-        "package"
-        "-DCMAKE_TOOLCHAIN_FILE=./cmake/toolchain-mingw.cmake -DCPACK_GENERATOR=\"ZIP;NSIS\""
-)
-if(APPLE)
-    # This can only be executed on macOS since it is not legally allowed to run the VM on any other OS
-    add_vagrant_build_target(
-            "build-macos-release"
-            "macos"
-            "package"
-            "-DCMAKE_TOOLCHAIN_FILE=./cmake/toolchain-macos.cmake -DCPACK_GENERATOR=\"ZIP\""
-    )
-endif()
-add_vagrant_build_target(
-        "check-compilation-on-freebsd10"
-        "freebsd-10.2"
-        "all"
-        ""
-)
-add_vagrant_build_target(
-        "check-compilation-on-openbsd59"
-        "openbsd-5.9"
-        "all"
-        "-DCMAKE_C_COMPILER=egcc -DCMAKE_CXX_COMPILER=eg++"
-)
-
-
-add_custom_target(build-releases)
-add_custom_command(
-    TARGET build-releases
-    COMMAND make build-deb-package-on-u1404_amd64
-    COMMAND make build-deb-package-on-u1404_i386
-    COMMAND make build-win-release-on-u1404_amd64
-    COMMAND make check-compilation-on-freebsd10
-    COMMAND make check-compilation-on-openbsd59
-)
 
 ## Rebuilding contributors.txt
 
