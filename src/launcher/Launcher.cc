@@ -50,6 +50,7 @@ void Launcher::show() {
 	customResolutionButton->callback( (Fl_Callback*)enableCustomResolutionSelection, (void*)(this) );
 	playButton->callback( (Fl_Callback*)startGame, (void*)(this) );
 	editorButton->callback( (Fl_Callback*)startEditor, (void*)(this) );
+	guessVersionButton->callback( (Fl_Callback*)guessVersion, (void*)(this) );
 
 	populateChoices();
 	initializeInputsFromDefaults();
@@ -189,6 +190,7 @@ void Launcher::openDataDirectorySelector(Fl_Widget *btn, void *userdata) {
 	Fl_Native_File_Chooser fnfc;
 	fnfc.title("Select the original Jagged Alliance 2 install directory");
 	fnfc.type(Fl_Native_File_Chooser::BROWSE_DIRECTORY);
+	fnfc.directory(window->dataDirectoryInput->value());
 
 	switch ( fnfc.show() ) {
 		case -1:
@@ -244,3 +246,34 @@ void Launcher::startEditor(Fl_Widget* btn, void* userdata) {
 	window->writeJsonFile();
 	window->startExecutable(true);
 }
+
+void Launcher::guessVersion(Fl_Widget* btn, void* userdata) {
+	Launcher* window = static_cast< Launcher* >( userdata );
+	fl_message_title(window->guessVersionButton->label());
+	auto choice = fl_choice("Comparing resources packs can take a long time.\nAre you sure you want to continue?", "Stop", "Continue", 0);
+	if (choice != 1) {
+		return;
+	}
+
+	char* log = NULL;
+	auto gamedir = window->dataDirectoryInput->value();
+	auto guessedVersion = guess_resource_version(gamedir, &log);
+	printf("%s", log);
+	if (guessedVersion != -1) {
+		auto resourceVersionIndex = 0;
+		for (auto version : predefinedVersions) {
+			if (version == (VanillaVersion) guessedVersion) {
+				break;
+			}
+			resourceVersionIndex += 1;
+		}
+		window->gameVersionInput->value(resourceVersionIndex);
+		fl_message_title(window->guessVersionButton->label());
+		fl_message("Success!");
+	} else {
+		fl_message_title(window->guessVersionButton->label());
+		fl_alert("Failure!");
+	}
+	free_rust_string(log);
+}
+
