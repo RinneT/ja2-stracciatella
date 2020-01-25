@@ -1,0 +1,28 @@
+name: Nightly trigger
+
+on:
+  schedule:
+    - cron:  '0 2 * * *'
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout nightly
+      uses: actions/checkout@v1
+      with:
+        ref: nightly
+    - name: Update nightly
+      run: |
+        # user and email are required for pushing
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        # fast forward to current master
+        git merge origin/master --ff-only
+    - name: Push nightly
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: nightly

@@ -53,7 +53,7 @@
 
 #include "ContentManager.h"
 #include "GameInstance.h"
-#include "slog/slog.h"
+#include "Logger.h"
 
 static BOOLEAN gfWasInMeanwhile = FALSE;
 
@@ -292,7 +292,7 @@ void AddItemsToUnLoadedSector(INT16 const sMapX, INT16 const sMapY, INT8 const b
 		{
 			wi->usFlags |= WORLD_ITEM_GRIDNO_NOT_SET_USE_ENTRY_POINT;
 			// Display warning.....
-			SLOGW(DEBUG_TAG_TACTSAVE,
+			SLOGW(
 				"Trying to add item ( %d: %ls ) to invalid gridno in unloaded sector. Please Report.",
 				wi->o.usItem, ItemNames[wi->o.usItem]);
 		}
@@ -500,42 +500,34 @@ void LoadCurrentSectorsInformationFromTempItemsFile()
 		return;
 	}
 
-	bool used_tempfile = false;
-
 	if (flags & SF_ITEM_TEMP_FILE_EXISTS)
 	{
 		LoadAndAddWorldItemsFromTempFile(x, y, z);
-		used_tempfile = true;
 	}
 
 	if (flags & SF_ROTTING_CORPSE_TEMP_FILE_EXISTS)
 	{
 		LoadRottingCorpsesFromTempCorpseFile(x, y, z);
-		used_tempfile = true;
 	}
 
 	if (flags & SF_MAP_MODIFICATIONS_TEMP_FILE_EXISTS)
 	{
 		LoadAllMapChangesFromMapTempFileAndApplyThem();
-		used_tempfile = true;
 	}
 
 	if (flags & SF_DOOR_TABLE_TEMP_FILES_EXISTS)
 	{
 		LoadDoorTableFromDoorTableTempFile();
-		used_tempfile = true;
 	}
 
 	if (flags & SF_REVEALED_STATUS_TEMP_FILE_EXISTS)
 	{
 		LoadRevealedStatusArrayFromRevealedTempFile();
-		used_tempfile = true;
 	}
 
 	if (flags & SF_DOOR_STATUS_TEMP_FILE_EXISTS)
 	{
 		LoadDoorStatusArrayFromDoorStatusTempFile();
-		used_tempfile = true;
 	}
 
 	// if the save is an older version, use the old way of loading it up
@@ -544,7 +536,6 @@ void LoadCurrentSectorsInformationFromTempItemsFile()
 		if (flags & SF_ENEMY_PRESERVED_TEMP_FILE_EXISTS)
 		{
 			LoadEnemySoldiersFromTempFile();
-			used_tempfile = true;
 		}
 	}
 	else
@@ -553,35 +544,27 @@ void LoadCurrentSectorsInformationFromTempItemsFile()
 		if (flags & SF_ENEMY_PRESERVED_TEMP_FILE_EXISTS)
 		{
 			NewWayOfLoadingEnemySoldiersFromTempFile();
-			used_tempfile = true;
 		}
 		if (flags & SF_CIV_PRESERVED_TEMP_FILE_EXISTS)
 		{
 			NewWayOfLoadingCiviliansFromTempFile();
-			used_tempfile = true;
 		}
 	}
 
 	if (flags & SF_SMOKE_EFFECTS_TEMP_FILE_EXISTS)
 	{
 		LoadSmokeEffectsFromMapTempFile(x, y, z);
-		used_tempfile = true;
 	}
 
 	if (flags & SF_LIGHTING_EFFECTS_TEMP_FILE_EXISTS)
 	{
 		LoadLightEffectsFromMapTempFile(x, y, z);
-		used_tempfile = true;
 	}
 
 	// Init the world since we have modified the map
 	InitLoadedWorld();
 
 	guiTimeCurrentSectorWasLastLoaded = GetLastTimePlayerWasInSector();
-
-#if 0 // XXX was commented out
-	if (used_tempfile) ValidateSoldierInitLinks(3);
-#endif
 
 	StripEnemyDetailedPlacementsIfSectorWasPlayerLiberated();
 }
@@ -598,7 +581,7 @@ static void SetLastTimePlayerWasInSector(void)
 		UNDERGROUND_SECTORINFO* const u = FindUnderGroundSector(gWorldSectorX, gWorldSectorY, gbWorldSectorZ);
 		if (!u)
 		{
-			SLOGW(DEBUG_TAG_TACTSAVE, "Failed to Set the 'uiTimeCurrentSectorWasLastLoaded' for an underground sector");
+			SLOGW("Failed to Set the 'uiTimeCurrentSectorWasLastLoaded' for an underground sector");
 			return;
 		}
 		u->uiTimeCurrentSectorWasLastLoaded = GetWorldTotalMin();
@@ -617,7 +600,7 @@ static UINT32 GetLastTimePlayerWasInSector(void)
 		UNDERGROUND_SECTORINFO const* const u = FindUnderGroundSector(gWorldSectorX, gWorldSectorY, gbWorldSectorZ);
 		if (!u)
 		{
-			SLOGW(DEBUG_TAG_TACTSAVE, "Failed to Get the 'uiTimeCurrentSectorWasLastLoaded' from an underground sector");
+			SLOGW("Failed to Get the 'uiTimeCurrentSectorWasLastLoaded' from an underground sector");
 			return 0;
 		}
 		return u->uiTimeCurrentSectorWasLastLoaded;
@@ -764,7 +747,7 @@ static void LoadRottingCorpsesFromTempCorpseFile(INT16 const x, INT16 const y, I
 		}
 		if (!AddRottingCorpse(&def))
 		{
-			SLOGD(DEBUG_TAG_TACTSAVE, "Failed to add a corpse to GridNo # %d", def.sGridNo);
+			SLOGD("Failed to add a corpse to GridNo # %d", def.sGridNo);
 		}
 	}
 
@@ -933,7 +916,7 @@ void AddDeadSoldierToUnLoadedSector(INT16 const x, INT16 const y, UINT8 const z,
 	}
 	else
 	{
-		SLOGE(DEBUG_TAG_ASSERTS, "Flag not is Switch statement");
+		SLOGA("Flag not is Switch statement");
 	}
 
 	//Create an array of objects from the mercs inventory
@@ -968,7 +951,7 @@ void AddDeadSoldierToUnLoadedSector(INT16 const x, INT16 const y, UINT8 const z,
 
 	// Convert the soldier into a rotting corpse
 	ROTTING_CORPSE_DEFINITION c;
-	memset(&c, 0, sizeof(c));
+	c = ROTTING_CORPSE_DEFINITION{};
 	c.ubBodyType        = s->ubBodyType;
 	c.sGridNo           = grid_no;
 	c.sHeightAdjustment = s->sHeightAdjustment;
@@ -1122,7 +1105,7 @@ void GetMapTempFileName(SectorFlags const uiType, char* const pMapName, INT16 co
 		case SF_LIGHTING_EFFECTS_TEMP_FILE_EXISTS:  prefix = "l";  break;
 		case SF_CIV_PRESERVED_TEMP_FILE_EXISTS:     prefix = "c";  break;
 
-		default: SLOGE(DEBUG_TAG_ASSERTS, "GetMapTempFileName: invalid Type"); return;
+		default: SLOGA("GetMapTempFileName: invalid Type"); return;
 	}
 	sprintf(pMapName, TEMPDIR "/%s_%s", prefix, zTempName);
 }
@@ -1195,7 +1178,7 @@ static void SynchronizeItemTempFileVisbleItemsToSectorInfoVisbleItems(INT16 cons
 		const UINT32 uiReported = GetNumberOfVisibleWorldItemsFromSectorStructureForSector(sMapX, sMapY, bMapZ);
 		if (uiItemCount != uiReported)
 		{
-			SLOGW(DEBUG_TAG_TACTSAVE, "SynchronizeItemTempFile() Reported %d, should be %d", uiReported, uiItemCount);
+			SLOGW("SynchronizeItemTempFile() Reported %d, should be %d", uiReported, uiItemCount);
 		}
 	}
 	SetNumberOfVisibleWorldItemsInSectorStructureForSector(sMapX, sMapY, bMapZ, uiItemCount);
@@ -3517,7 +3500,7 @@ static UINT8 const* GetRotationArray()
 
 TEST(TacticalSave, asserts)
 {
-	EXPECT_EQ(lengthof(g_encryption_array), BASE_NUMBER_OF_ROTATION_ARRAYS * 12);
+	EXPECT_EQ(lengthof(g_encryption_array), static_cast<size_t>(BASE_NUMBER_OF_ROTATION_ARRAYS * 12));
 }
 
 #endif

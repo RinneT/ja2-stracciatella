@@ -115,7 +115,7 @@ static BOOLEAN gfChangeInsuranceFormButtons = FALSE;
 
 static SOLDIERTYPE* g_insurance_merc_array[20];
 static UINT         g_n_insurable_mercs;
-INT16               gsCurrentInsuranceMercIndex;
+UINT16              gusCurrentInsuranceMercIndex;
 
 
 //link to the varios pages
@@ -146,7 +146,7 @@ static InsuranceInfo insurance_info[3];
 
 static void SetNumberOfDisplayedInsuranceMercs(void)
 {
-	gubNumberofDisplayedInsuranceGrids = MIN(g_n_insurable_mercs - gsCurrentInsuranceMercIndex, 3);
+	gubNumberofDisplayedInsuranceGrids = MIN(g_n_insurable_mercs - gusCurrentInsuranceMercIndex, 3);
 }
 
 
@@ -277,7 +277,7 @@ static void InsContractNoMercsPopupCallBack(MessageBoxReturnValue);
 void RenderInsuranceContract()
 {
 	wchar_t sText[800];
-	INT16   sNextMercID;
+	UINT16  usNextMercID;
 	UINT16  usPosX;
 
 
@@ -322,11 +322,11 @@ void RenderInsuranceContract()
 	DisplaySmallRedLineWithShadow( INS_CTRCT_FIRST_BULLET_TEXT_X, INS_CTRCT_RED_BAR_UNDER_INSTRUCTION_TEXT_Y, INS_CTRCT_FIRST_BULLET_TEXT_X+INS_CTRCT_INTSRUCTION_TEXT_WIDTH, INS_CTRCT_RED_BAR_UNDER_INSTRUCTION_TEXT_Y);
 
 
-	sNextMercID =	gsCurrentInsuranceMercIndex;
+	usNextMercID =	gusCurrentInsuranceMercIndex;
 	const UINT count_insurance_grids = gubNumberofDisplayedInsuranceGrids;
 	for (UINT i = 0; i < count_insurance_grids; ++i)
 	{
-		SOLDIERTYPE* const s = g_insurance_merc_array[sNextMercID++];
+		SOLDIERTYPE* const s = g_insurance_merc_array[usNextMercID++];
 		DisplayOrderGrid(i, s);
 	}
 
@@ -360,7 +360,7 @@ static void BtnInsContractPrevButtonCallback(GUI_BUTTON *btn, INT32 reason)
 {
 	if (reason & MSYS_CALLBACK_REASON_LBUTTON_UP)
 	{
-		if (gsCurrentInsuranceMercIndex > 2) gsCurrentInsuranceMercIndex -= 3;
+		if (gusCurrentInsuranceMercIndex > 2) gusCurrentInsuranceMercIndex -= 3;
 		// signal that we want to change the number of forms on the page
 		gfChangeInsuranceFormButtons = TRUE;
 	}
@@ -371,7 +371,7 @@ static void BtnInsContractNextButtonCallBack(GUI_BUTTON *btn, INT32 reason)
 {
 	if (reason & MSYS_CALLBACK_REASON_LBUTTON_UP)
 	{
-		gsCurrentInsuranceMercIndex += 3;
+		gusCurrentInsuranceMercIndex += 3;
 		// signal that we want to change the number of forms on the page
 		gfChangeInsuranceFormButtons = TRUE;
 	}
@@ -544,7 +544,7 @@ try
 	if( iCostOfContract < 0 )
 	{
 		//shouldnt get in here now since we can longer give refunds
-		SLOGE(DEBUG_TAG_ASSERTS, "DisplayOrderGrid: negative contract cost");
+		SLOGA("DisplayOrderGrid: negative contract cost");
 	}
 	else
 	{
@@ -614,9 +614,9 @@ static void SelectInsuranceContractRegionCallBack(MOUSE_REGION* pRegion, INT32 i
 static void DisableInsuranceContractNextPreviousbuttons(void)
 {
 	//disable the next button if there is no more mercs to display
-	EnableButton(guiInsContractNextBackButton, gsCurrentInsuranceMercIndex + gubNumberofDisplayedInsuranceGrids < g_n_insurable_mercs);
+	EnableButton(guiInsContractNextBackButton, gusCurrentInsuranceMercIndex + gubNumberofDisplayedInsuranceGrids < g_n_insurable_mercs);
 	//if we are currently displaying the first set of mercs, disable the previous button
-	EnableButton(guiInsContractPrevBackButton, gsCurrentInsuranceMercIndex >= 3);
+	EnableButton(guiInsContractPrevBackButton, gusCurrentInsuranceMercIndex >= 3);
 }
 
 
@@ -849,10 +849,10 @@ void AddLifeInsurancePayout(SOLDIERTYPE* const pSoldier)
 	{
 		LaptopSaveInfo.ubNumberLifeInsurancePayouts++;
 		LaptopSaveInfo.pLifeInsurancePayouts = REALLOC(LaptopSaveInfo.pLifeInsurancePayouts, LIFE_INSURANCE_PAYOUT, LaptopSaveInfo.ubNumberLifeInsurancePayouts);
-		memset( &LaptopSaveInfo.pLifeInsurancePayouts[ LaptopSaveInfo.ubNumberLifeInsurancePayouts - 1 ], 0, sizeof( LIFE_INSURANCE_PAYOUT ) );
+		LaptopSaveInfo.pLifeInsurancePayouts[ LaptopSaveInfo.ubNumberLifeInsurancePayouts - 1 ] = LIFE_INSURANCE_PAYOUT{};
 	}
 
-	for( ubPayoutID = 0; ubPayoutID < LaptopSaveInfo.ubNumberLifeInsurancePayouts; ubPayoutID++ )
+	for( ubPayoutID = 0; ubPayoutID < LaptopSaveInfo.ubNumberLifeInsurancePayoutUsed; ubPayoutID++ )
 	{
 		//get an empty element in the array
 		if( !LaptopSaveInfo.pLifeInsurancePayouts[ ubPayoutID ].fActive )
@@ -1118,7 +1118,7 @@ void PurchaseOrExtendInsuranceForSoldier( SOLDIERTYPE *pSoldier, UINT32 uiInsura
 		if( iAmountOfMoneyTransfer > 0 )
 			AddTransactionToPlayersBook(	EXTENDED_INSURANCE, pSoldier->ubProfile, GetWorldTotalMin(), -( iAmountOfMoneyTransfer ) );
 		else
-			SLOGE(DEBUG_TAG_ASSERTS, "negative Cost of Life Insurance, something went horribly wrong");
+			SLOGA("negative Cost of Life Insurance, something went horribly wrong");
 	}
 	else
 	{

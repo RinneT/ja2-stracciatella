@@ -617,7 +617,7 @@ void DrawMap(void)
 			UINT16 const src_w = guiBIGMAP->Width();
 			UINT16 const src_h = guiBIGMAP->Height();
 			if (w > src_w - x) w = src_w - x;
-			if (h > src_h - x) h = src_h - y;
+			if (h > src_h - y) h = src_h - y;
 			SGPBox const clip = { x, y, w, h };
 			BltVideoSurface(guiSAVEBUFFER, guiBIGMAP, MAP_VIEW_START_X + MAP_GRID_X, MAP_VIEW_START_Y + MAP_GRID_Y - 2, &clip);
 		}
@@ -1526,8 +1526,8 @@ static void TracePathRoute(PathSt* const pPath)
 				fUTurnFlag =
 					(iDeltaB1 == -WORLD_MAP_X && iDeltaA == -WORLD_MAP_X && iDeltaB == -1)           ||
 					(iDeltaB1 == -WORLD_MAP_X && iDeltaA == -WORLD_MAP_X && iDeltaB ==  1)           ||
+					(iDeltaB1 ==  WORLD_MAP_X && iDeltaA ==  WORLD_MAP_X && iDeltaB == -1)           ||
 					(iDeltaB1 ==  WORLD_MAP_X && iDeltaA ==  WORLD_MAP_X && iDeltaB ==  1)           ||
-					(iDeltaB1 == -WORLD_MAP_X && iDeltaA == -WORLD_MAP_X && iDeltaB ==  1)           ||
 					(iDeltaB1 == -1           && iDeltaA == -1           && iDeltaB == -WORLD_MAP_X) ||
 					(iDeltaB1 == -1           && iDeltaA == -1           && iDeltaB ==  WORLD_MAP_X) ||
 					(iDeltaB1 ==  1           && iDeltaA ==  1           && iDeltaB == -WORLD_MAP_X) ||
@@ -2145,11 +2145,11 @@ static BOOLEAN TraceCharAnimatedRoute(PathSt* const pPath, const BOOLEAN fForceU
 			{
 				fUTurnFlag=TRUE;
 			}
-			else if((iDeltaB1==WORLD_MAP_X)&&(iDeltaA==WORLD_MAP_X)&&(iDeltaB==1))
+			else if((iDeltaB1==WORLD_MAP_X)&&(iDeltaA==WORLD_MAP_X)&&(iDeltaB==-1))
 			{
 				fUTurnFlag=TRUE;
 			}
-			else if((iDeltaB1==-WORLD_MAP_X)&&(iDeltaA==-WORLD_MAP_X)&&(iDeltaB==1))
+			else if((iDeltaB1==WORLD_MAP_X)&&(iDeltaA==WORLD_MAP_X)&&(iDeltaB==1))
 			{
 				fUTurnFlag=TRUE;
 			}
@@ -3173,9 +3173,6 @@ void DisplayPositionOfHelicopter( void )
 		{
 			const GROUP* const pGroup = GetGroup(v.ubMovementGroup);
 
-			// this came up in one bug report!
-			Assert( pGroup->uiTraverseTime != -1 );
-
 			if (pGroup->uiTraverseTime > 0 && pGroup->uiTraverseTime != TRAVERSE_TIME_IMPOSSIBLE)
 			{
 				flRatio = ( ( pGroup->uiTraverseTime + GetWorldTotalMin() ) - pGroup->uiArrivalTime ) / ( float ) pGroup->uiTraverseTime;
@@ -3338,9 +3335,6 @@ BOOLEAN CheckForClickOverHelicopterIcon( INT16 sClickedSectorX, INT16 sClickedSe
 
 	if ( pGroup->fBetweenSectors )
 	{
-		// this came up in one bug report!
-		Assert( pGroup->uiTraverseTime != -1 );
-
 		if (pGroup->uiTraverseTime > 0 && pGroup->uiTraverseTime != TRAVERSE_TIME_IMPOSSIBLE)
 		{
 			flRatio = ( pGroup->uiTraverseTime - pGroup->uiArrivalTime + GetWorldTotalMin() ) / ( float ) pGroup->uiTraverseTime;
@@ -4155,7 +4149,7 @@ static void HandleShutDownOfMilitiaPanelIfPeopleOnTheCursor(INT16 const town)
 
 	FOR_EACH_SECTOR_IN_TOWN(i, town)
 	{
-		INT32 const sector    = i->sector;
+		UINT8 const sector    = i->sector;
 		if (!SectorOursAndPeaceful(SECTORX(sector), SECTORY(sector), 0)) continue;
 		SECTORINFO& si        = SectorInfo[sector];
 		UINT8&      n_green   = si.ubNumberOfCivsAtLevel[GREEN_MILITIA];
@@ -4243,7 +4237,7 @@ static void HandleEveningOutOfTroopsAmongstSectors()
 
 	FOR_EACH_SECTOR_IN_TOWN(i, town)
 	{
-		INT32 const sector = i->sector;
+		UINT8 const sector = i->sector;
 		if (StrategicMap[SECTOR_INFO_TO_STRATEGIC_INDEX(sector)].fEnemyControlled) continue;
 		if (NumHostilesInSector(SECTORX(sector), SECTORY(sector), 0) != 0)         continue;
 

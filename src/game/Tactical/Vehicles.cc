@@ -117,7 +117,7 @@ INT32 AddVehicleToList(const INT16 sMapX, const INT16 sMapY, const INT16 sGridNo
 	VEHICLETYPE* const v = &pVehicleList[vid];
 
 	// found a slot
-	memset(v, 0, sizeof(*v));
+	*v = VEHICLETYPE{};
 	v->ubMovementGroup = 0;
 	v->sSectorX        = sMapX;
 	v->sSectorY        = sMapY;
@@ -151,7 +151,7 @@ INT32 AddVehicleToList(const INT16 sMapX, const INT16 sMapY, const INT16 sGridNo
 void RemoveVehicleFromList(VEHICLETYPE& v)
 {
 	v.pMercPath = ClearStrategicPathList(v.pMercPath, 0);
-	memset(&v, 0, sizeof(v));
+	v = VEHICLETYPE{};
 }
 
 
@@ -908,7 +908,6 @@ static void TeleportVehicleToItsClosestSector(const UINT8 ubGroupID)
 	pGroup = GetGroup( ubGroupID );
 	Assert( pGroup );
 
-	Assert( pGroup->uiTraverseTime != -1 );
 	Assert(pGroup->uiTraverseTime > 0 && pGroup->uiTraverseTime != TRAVERSE_TIME_IMPOSSIBLE);
 
 	Assert( pGroup->uiArrivalTime >= GetWorldTotalMin() );
@@ -1059,17 +1058,17 @@ void HandleVehicleMovementSound(const SOLDIERTYPE* const s, const BOOLEAN fOn)
 	VEHICLETYPE* const v = &pVehicleList[s->bVehicleID];
 	if (fOn)
 	{
-		if (v->iMovementSoundID == NO_SAMPLE)
+		if (v->uiMovementSoundID == NO_SAMPLE)
 		{
-			v->iMovementSoundID = PlayLocationJA2Sample(s->sGridNo, g_vehicle_type_info[v->ubVehicleType].move_sound, HIGHVOLUME, 1);
+			v->uiMovementSoundID = PlayLocationJA2Sample(s->sGridNo, g_vehicle_type_info[v->ubVehicleType].move_sound, HIGHVOLUME, 1);
 		}
 	}
 	else
 	{
-		if (v->iMovementSoundID != NO_SAMPLE)
+		if (v->uiMovementSoundID != NO_SAMPLE)
 		{
-			SoundStop(v->iMovementSoundID);
-			v->iMovementSoundID = NO_SAMPLE;
+			SoundStop(v->uiMovementSoundID);
+			v->uiMovementSoundID = NO_SAMPLE;
 		}
 	}
 }

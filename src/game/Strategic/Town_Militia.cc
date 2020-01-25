@@ -27,6 +27,8 @@
 #include "ScreenIDs.h"
 #include "UILayout.h"
 
+#include <algorithm>
+#include <iterator>
 
 #define SIZE_OF_MILITIA_COMPLETED_TRAINING_LIST 50
 
@@ -308,7 +310,7 @@ static void HandleMilitiaDefections(INT16 sMapX, INT16 sMapY)
 					uiChanceToDefect = 90;
 					break;
 				default:
-					SLOGE(DEBUG_TAG_ASSERTS, "HandleMilitiaDefections: invalid Rank");
+					SLOGA("HandleMilitiaDefections: invalid Rank");
 					return;
 			}
 
@@ -811,7 +813,7 @@ static void AddIfTrainingUnpaidSector(SOLDIERTYPE const& s)
 
 static void BuildListOfUnpaidTrainableSectors()
 {
-	memset(gsUnpaidStrategicSector, 0, sizeof(gsUnpaidStrategicSector));
+	std::fill(std::begin(gsUnpaidStrategicSector), std::end(gsUnpaidStrategicSector), 0);
 
 	if (fInMapMode)
 	{

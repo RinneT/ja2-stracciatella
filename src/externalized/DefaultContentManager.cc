@@ -1,8 +1,5 @@
 #include "DefaultContentManager.h"
 
-#include <memory>
-#include <stdexcept>
-
 #include "game/Directories.h"
 #include "game/Strategic/Strategic_Status.h"
 #include "game/Tactical/Arms_Dealer.h"
@@ -16,10 +13,8 @@
 #include "game/GameState.h"
 
 #include "sgp/FileMan.h"
-#include "sgp/LibraryDataBase.h"
 #include "sgp/MemMan.h"
 #include "sgp/StrUtils.h"
-#include "sgp/UTF8String.h"
 
 #include "AmmoTypeModel.h"
 #include "CalibreModel.h"
@@ -28,11 +23,17 @@
 #include "JsonObject.h"
 #include "JsonUtility.h"
 #include "MagazineModel.h"
+#include "RustInterface.h"
 #include "WeaponModels.h"
 #include "policy/DefaultGamePolicy.h"
 #include "policy/DefaultIMPPolicy.h"
 
-#include "slog/slog.h"
+#include "Logger.h"
+
+#include <string_theory/format>
+
+#include <memory>
+#include <stdexcept>
 
 #define BASEDATADIR    "data"
 
@@ -146,7 +147,8 @@ DefaultContentManager::DefaultContentManager(GameVersion gameVersion,
 	:m_gameVersion(gameVersion),
 	mNormalGunChoice(ARMY_GUN_LEVELS),
 	mExtendedGunChoice(ARMY_GUN_LEVELS),
-	m_dealersInventory(NUM_ARMS_DEALERS)
+	m_dealersInventory(NUM_ARMS_DEALERS),
+	m_libraryDB(LibraryDB_create())
 {
 	/*
 	 * Searching actual paths to directories 'Data' and 'Data/Tilecache', 'Data/Maps'
@@ -178,8 +180,6 @@ DefaultContentManager::DefaultContentManager(GameVersion gameVersion,
 	}
 #endif
 
-	m_libraryDB = new LibraryDB();
-
 	m_bobbyRayNewInventory = NULL;
 	m_bobbyRayUsedInventory = NULL;
 	m_impPolicy = NULL;
@@ -195,23 +195,32 @@ std::vector<std::string> DefaultContentManager::getListOfGameResources() const
 
 void DefaultContentManager::initGameResouces(const std::string &stracciatellaHomeDir, const std::vector<std::string> &libraries)
 {
-	const char *failedLib = m_libraryDB->InitializeFileDatabase(m_dataDir, libraries);
-	if(failedLib)
+	for (auto it = libraries.begin(); it != libraries.end(); ++it)
 	{
+		if (!LibraryDB_push(m_libraryDB.get(), m_dataDir.c_str(), it->c_str()))
+		{
+			std::string message = FormattedString(
+				"Library '%s' is not found in folder '%s'.\n\nPlease make sure that '%s' contains files of the original game.  You can change this path by editing file '%s/ja2.json'.\n",
+				it->c_str(), m_dataDir.c_str(), m_gameResRootPath.c_str(), stracciatellaHomeDir.c_str());
+			throw LibraryFileNotFoundException(message);
+		}
+	}
+}
+
+void DefaultContentManager::addExtraResources(const std::string &baseDir, const std::string &library)
+{
+	if (!LibraryDB_push(m_libraryDB.get(), baseDir.c_str(), library.c_str())) {
+		RustPointer<char> error(getRustError());
 		std::string message = FormattedString(
-			"Library '%s' is not found in folder '%s'.\n\nPlease make sure that '%s' contains files of the original game.  You can change this path by editing file '%s/ja2.json'.\n",
-			failedLib, m_dataDir.c_str(), m_gameResRootPath.c_str(), stracciatellaHomeDir.c_str());
+			"Library '%s' is not found in folder '%s': %s",
+			library.c_str(), baseDir.c_str(), error.get());
 		throw LibraryFileNotFoundException(message);
 	}
 }
 
 DefaultContentManager::~DefaultContentManager()
 {
-	if(m_libraryDB)
-	{
-		m_libraryDB->ShutDownFileDatabase();
-		delete m_libraryDB;
-	}
+	m_libraryDB.reset(nullptr);
 
 	for (const ItemModel* item : m_items)
 	{
@@ -247,15 +256,15 @@ DefaultContentManager::~DefaultContentManager()
 	delete m_impPolicy;
 	delete m_gamePolicy;
 
-	for (const UTF8String *str : m_newStrings)
+	for (const ST::string *str : m_newStrings)
 	{
 		delete str;
 	}
-	for (const UTF8String *str : m_calibreNames)
+	for (const ST::string *str : m_calibreNames)
 	{
 		delete str;
 	}
-	for (const UTF8String *str : m_calibreNamesBobbyRay)
+	for (const ST::string *str : m_calibreNamesBobbyRay)
 	{
 		delete str;
 	}
@@ -278,7 +287,7 @@ std::string DefaultContentManager::getMapPath(const char *mapName) const
 	result += "/";
 	result += mapName;
 
-	SLOGD(DEBUG_TAG_DEFAULTCM, "map file %s", result.c_str());
+	SLOGD("map file %s", result.c_str());
 
 	return result;
 }
@@ -290,7 +299,7 @@ std::string DefaultContentManager::getRadarMapResourceName(const std::string &ma
 	result += "/";
 	result += mapName;
 
-	SLOGD(DEBUG_TAG_DEFAULTCM, "map file %s", result.c_str());
+	SLOGD("map file %s", result.c_str());
 
 	return result;
 }
@@ -310,14 +319,14 @@ std::string DefaultContentManager::getTilesetDBResName() const
 
 std::string DefaultContentManager::getMapPath(const wchar_t *mapName) const
 {
-	SLOGW(DEBUG_TAG_DEFAULTCM, "converting wchar to char");
+	SLOGW("converting wchar to char");
 
 	// This will not work for non-latin names.
 	// But it is just a hack to make the code compile.
 	// XXX: This method should be removed altogether
 
-	UTF8String str(mapName);
-	return getMapPath(str.getUTF8());
+	ST::string str(mapName);
+	return getMapPath(str.c_str());
 }
 
 /** Open map for reading. */
@@ -409,33 +418,27 @@ SGPFile* DefaultContentManager::openGameResForReading(const char* filename) cons
 			d = FileMan::openFileCaseInsensitive(m_dataDir, filename, mode);
 			if (d < 0)
 			{
-				LibraryFile libFile;
-				memset(&libFile, 0, sizeof(libFile));
-
 				// failed to open in the data dir
 				// let's try libraries
 
-				// XXX: need to optimize this
-				// XXX: the whole LibraryDataBase thing requires refactoring
-				std::string _filename(filename);
-				FileMan::slashifyPath(_filename);
-				if (m_libraryDB->FindFileInTheLibrarry(_filename, &libFile))
+				RustPointer<LibraryFile> libFile(LibraryFile_open(m_libraryDB.get(), filename));
+				if (libFile)
 				{
-					SLOGD(DEBUG_TAG_DEFAULTCM, "Opened file (from library ): %s", filename);
+					SLOGD("Opened file (from library ): %s", filename);
 					SGPFile *file = MALLOCZ(SGPFile);
 					file->flags = SGPFILE_NONE;
-					file->u.lib = libFile;
+					file->u.lib = libFile.release();
 					return file;
 				}
 			}
 			else
 			{
-				SLOGD(DEBUG_TAG_DEFAULTCM, "Opened file (from data dir): %s", filename);
+				SLOGD("Opened file (from data dir): %s", filename);
 			}
 		}
 		else
 		{
-			SLOGD(DEBUG_TAG_DEFAULTCM, "Opened file (current dir  ): %s", filename);
+			SLOGD("Opened file (current dir  ): %s", filename);
 		}
 	}
 
@@ -472,7 +475,11 @@ bool DefaultContentManager::doesGameResExists(char const* filename) const
 			char path[512];
 			snprintf(path, lengthof(path), "%s/%s", m_dataDir.c_str(), filename);
 			file = fopen(path, "rb");
-			if (!file) return m_libraryDB->CheckIfFileExistInLibrary(filename);
+			if (!file)
+			{
+				RustPointer<LibraryFile> libFile(LibraryFile_open(m_libraryDB.get(), filename));
+				return static_cast<bool>(libFile);
+			}
 		}
 
 		fclose(file);
@@ -514,27 +521,27 @@ void DefaultContentManager::loadEncryptedString(SGPFile* const File, wchar_t* De
 }
 
 /** Load dialogue quote from file. */
-UTF8String* DefaultContentManager::loadDialogQuoteFromFile(const char* fileName, int quote_number)
+ST::string* DefaultContentManager::loadDialogQuoteFromFile(const char* fileName, int quote_number)
 {
 	AutoSGPFile File(openGameResForReading(fileName));
 
 	wchar_t quote[DIALOGUESIZE];
 	LoadEncryptedData(getStringEncType(), File, quote, quote_number * DIALOGUESIZE, DIALOGUESIZE);
-	return new UTF8String(quote);
+	return new ST::string(quote);
 }
 
 /** Load all dialogue quotes for a character. */
-void DefaultContentManager::loadAllDialogQuotes(STRING_ENC_TYPE encType, const char* fileName, std::vector<UTF8String*> &quotes) const
+void DefaultContentManager::loadAllDialogQuotes(STRING_ENC_TYPE encType, const char* fileName, std::vector<ST::string*> &quotes) const
 {
 	AutoSGPFile File(openGameResForReading(fileName));
 	uint32_t fileSize = FileGetSize(File);
 	uint32_t numQuotes = fileSize / DIALOGUESIZE / 2;
-	// SLOGI(DEBUG_TAG_DEFAULTCM, "%d quotes in dialog %s", numQuotes, fileName);
-	for(int i = 0; i < numQuotes; i++)
+	// SLOGI("%d quotes in dialog %s", numQuotes, fileName);
+	for(uint32_t i = 0; i < numQuotes; i++)
 	{
 		wchar_t quote[DIALOGUESIZE];
 		LoadEncryptedData(encType, File, quote, i * DIALOGUESIZE, DIALOGUESIZE);
-		quotes.push_back(new UTF8String(quote));
+		quotes.push_back(new ST::string(quote));
 	}
 }
 
@@ -549,7 +556,7 @@ const WeaponModel* DefaultContentManager::getWeaponByName(const std::string &int
 	std::map<std::string, const WeaponModel*>::const_iterator it = m_weaponMap.find(internalName);
 	if(it == m_weaponMap.end())
 	{
-		SLOGE(DEBUG_TAG_DEFAULTCM, "weapon '%s' is not found", internalName.c_str());
+		SLOGE("weapon '%s' is not found", internalName.c_str());
 		throw std::runtime_error(FormattedString("weapon '%s' is not found", internalName.c_str()));
 	}
 	return it->second;//m_weaponMap[internalName];
@@ -559,7 +566,7 @@ const MagazineModel* DefaultContentManager::getMagazineByName(const std::string 
 {
 	if(m_magazineMap.find(internalName) == m_magazineMap.end())
 	{
-		SLOGE(DEBUG_TAG_DEFAULTCM, "magazine '%s' is not found", internalName.c_str());
+		SLOGE("magazine '%s' is not found", internalName.c_str());
 		throw std::runtime_error(FormattedString("magazine '%s' is not found", internalName.c_str()));
 	}
 	return m_magazineMap[internalName];
@@ -580,12 +587,12 @@ const CalibreModel* DefaultContentManager::getCalibre(uint8_t index)
 	return m_calibres[index];
 }
 
-const UTF8String* DefaultContentManager::getCalibreName(uint8_t index) const
+const ST::string* DefaultContentManager::getCalibreName(uint8_t index) const
 {
 	return m_calibreNames[index];
 }
 
-const UTF8String* DefaultContentManager::getCalibreNameForBobbyRay(uint8_t index) const
+const ST::string* DefaultContentManager::getCalibreNameForBobbyRay(uint8_t index) const
 {
 	return m_calibreNamesBobbyRay[index];
 }
@@ -603,7 +610,7 @@ bool DefaultContentManager::loadWeapons()
 	rapidjson::Document document;
 	if (document.Parse<rapidjson::kParseCommentsFlag>(jsonData.c_str()).HasParseError())
 	{
-		SLOGE(DEBUG_TAG_DEFAULTCM, "Failed to parse weapons.json");
+		SLOGE("Failed to parse weapons.json");
 		return false;
 	}
 	else
@@ -614,11 +621,11 @@ bool DefaultContentManager::loadWeapons()
 			{
 				JsonObjectReader obj(a[i]);
 				WeaponModel *w = WeaponModel::deserialize(obj, m_calibreMap);
-				SLOGD(DEBUG_TAG_DEFAULTCM, "Loaded weapon %d %s", w->getItemIndex(), w->getInternalName().c_str());
+				SLOGD("Loaded weapon %d %s", w->getItemIndex(), w->getInternalName().c_str());
 
 				if((w->getItemIndex() < 0) || (w->getItemIndex() > MAX_WEAPONS))
 				{
-					SLOGE(DEBUG_TAG_DEFAULTCM, "Weapon index must be in the interval 0 - %d", MAX_WEAPONS);
+					SLOGE("Weapon index must be in the interval 0 - %d", MAX_WEAPONS);
 					return false;
 				}
 
@@ -639,7 +646,7 @@ bool DefaultContentManager::loadMagazines()
 	rapidjson::Document document;
 	if (document.Parse<rapidjson::kParseCommentsFlag>(jsonData.c_str()).HasParseError())
 	{
-		SLOGE(DEBUG_TAG_DEFAULTCM, "Failed to parse magazines.json");
+		SLOGE("Failed to parse magazines.json");
 		return false;
 	}
 	else
@@ -650,11 +657,11 @@ bool DefaultContentManager::loadMagazines()
 			{
 				JsonObjectReader obj(a[i]);
 				MagazineModel *mag = MagazineModel::deserialize(obj, m_calibreMap, m_ammoTypeMap);
-				SLOGD(DEBUG_TAG_DEFAULTCM, "Loaded magazine %d %s", mag->getItemIndex(), mag->getInternalName().c_str());
+				SLOGD("Loaded magazine %d %s", mag->getItemIndex(), mag->getInternalName().c_str());
 
 				if((mag->getItemIndex() < FIRST_AMMO) || (mag->getItemIndex() > LAST_AMMO))
 				{
-					SLOGE(DEBUG_TAG_DEFAULTCM, "Magazine item index must be in the interval %d - %d", FIRST_AMMO, LAST_AMMO);
+					SLOGE("Magazine item index must be in the interval %d - %d", FIRST_AMMO, LAST_AMMO);
 					return false;
 				}
 
@@ -676,7 +683,7 @@ bool DefaultContentManager::loadCalibres()
 	rapidjson::Document document;
 	if (document.Parse<rapidjson::kParseCommentsFlag>(jsonData.c_str()).HasParseError())
 	{
-		SLOGE(DEBUG_TAG_DEFAULTCM, "Failed to parse calibres.json");
+		SLOGE("Failed to parse calibres.json");
 		return false;
 	}
 	else
@@ -687,7 +694,7 @@ bool DefaultContentManager::loadCalibres()
 			{
 				JsonObjectReader obj(a[i]);
 				CalibreModel *calibre = CalibreModel::deserialize(obj);
-				SLOGD(DEBUG_TAG_DEFAULTCM, "Loaded calibre %d %s", calibre->index, calibre->internalName.c_str());
+				SLOGD("Loaded calibre %d %s", calibre->index, calibre->internalName.c_str());
 
 				if(m_calibres.size() <= calibre->index)
 				{
@@ -715,7 +722,7 @@ bool DefaultContentManager::loadAmmoTypes()
 	rapidjson::Document document;
 	if (document.Parse<rapidjson::kParseCommentsFlag>(jsonData.c_str()).HasParseError())
 	{
-		SLOGE(DEBUG_TAG_DEFAULTCM, "Failed to parse ammo_types.json");
+		SLOGE("Failed to parse ammo_types.json");
 		return false;
 	}
 	else
@@ -726,7 +733,7 @@ bool DefaultContentManager::loadAmmoTypes()
 			{
 				JsonObjectReader obj(a[i]);
 				AmmoTypeModel *ammoType = AmmoTypeModel::deserialize(obj);
-				SLOGD(DEBUG_TAG_DEFAULTCM, "Loaded ammo type %d %s", ammoType->index, ammoType->internalName.c_str());
+				SLOGD("Loaded ammo type %d %s", ammoType->index, ammoType->internalName.c_str());
 
 				if(m_ammoTypes.size() <= ammoType->index)
 				{
@@ -748,14 +755,14 @@ bool DefaultContentManager::loadAmmoTypes()
 
 bool DefaultContentManager::loadMusicModeList(const MusicMode mode, rapidjson::Value &array)
 {
-	std::vector<const UTF8String*>* musicModeList = new std::vector<const UTF8String*>();
+	std::vector<const ST::string*>* musicModeList = new std::vector<const ST::string*>();
 
 	std::vector<std::string> utf8_encoded;
 	JsonUtility::parseListStrings(array, utf8_encoded);
 	for (const std::string &str : utf8_encoded)
 	{
-		musicModeList->push_back(new UTF8String(str.c_str()));
-		SLOGD(DEBUG_TAG_DEFAULTCM, "Loaded music %s", str.c_str());
+		musicModeList->push_back(new ST::string(str));
+		SLOGD("Loaded music %s", str.c_str());
 	}
 
 	m_musicMap[mode] = musicModeList;
@@ -770,33 +777,33 @@ bool DefaultContentManager::loadMusic()
 
 	rapidjson::Document document;
 	if (document.Parse<rapidjson::kParseCommentsFlag>(jsonData.c_str()).HasParseError()) {
-		SLOGE(DEBUG_TAG_DEFAULTCM, "Failed to parse music.json");
+		SLOGE("Failed to parse music.json");
 		return false;
 	}
 	if(!document.IsObject()) {
-		SLOGE(DEBUG_TAG_DEFAULTCM, "music.json has wrong structure");
+		SLOGE("music.json has wrong structure");
 		return false;
 	}
 
-	SLOGD(DEBUG_TAG_DEFAULTCM, "Loading main_menu music");
+	SLOGD("Loading main_menu music");
 	loadMusicModeList(MUSIC_MAIN_MENU, document["main_menu"]);
-	SLOGD(DEBUG_TAG_DEFAULTCM, "Loading main_menu music");
+	SLOGD("Loading main_menu music");
 	loadMusicModeList(MUSIC_LAPTOP, document["laptop"]);
-	SLOGD(DEBUG_TAG_DEFAULTCM, "Loading tactical music");
+	SLOGD("Loading tactical music");
 	loadMusicModeList(MUSIC_TACTICAL_NOTHING, document["tactical"]);
-	SLOGD(DEBUG_TAG_DEFAULTCM, "Loading tactical_enemypresent music");
+	SLOGD("Loading tactical_enemypresent music");
 	loadMusicModeList(MUSIC_TACTICAL_ENEMYPRESENT, document["tactical_enemypresent"]);
-	SLOGD(DEBUG_TAG_DEFAULTCM, "Loading tactical_battle music");
+	SLOGD("Loading tactical_battle music");
 	loadMusicModeList(MUSIC_TACTICAL_BATTLE, document["tactical_battle"]);
-	SLOGD(DEBUG_TAG_DEFAULTCM, "Loading tactical_creature music");
+	SLOGD("Loading tactical_creature music");
 	loadMusicModeList(MUSIC_TACTICAL_CREATURE_NOTHING, document["tactical_creature"]);
-	SLOGD(DEBUG_TAG_DEFAULTCM, "Loading tactical_creature_enemypresent music");
+	SLOGD("Loading tactical_creature_enemypresent music");
 	loadMusicModeList(MUSIC_TACTICAL_CREATURE_ENEMYPRESENT, document["tactical_creature_enemypresent"]);
-	SLOGD(DEBUG_TAG_DEFAULTCM, "Loading tactical_creature_battle music");
+	SLOGD("Loading tactical_creature_battle music");
 	loadMusicModeList(MUSIC_TACTICAL_CREATURE_BATTLE, document["tactical_creature_battle"]);
-	SLOGD(DEBUG_TAG_DEFAULTCM, "Loading tactical_victory music");
+	SLOGD("Loading tactical_victory music");
 	loadMusicModeList(MUSIC_TACTICAL_VICTORY, document["tactical_victory"]);
-	SLOGD(DEBUG_TAG_DEFAULTCM, "Loading tactical_defeat music");
+	SLOGD("Loading tactical_defeat music");
 	loadMusicModeList(MUSIC_TACTICAL_DEFEAT, document["tactical_defeat"]);
 
 	return true;
@@ -812,7 +819,7 @@ bool DefaultContentManager::readWeaponTable(
 	rapidjson::Document document;
 	if (document.Parse<rapidjson::kParseCommentsFlag>(jsonData.c_str()).HasParseError())
 	{
-		SLOGE(DEBUG_TAG_DEFAULTCM, "Failed to parse %s", fileName);
+		SLOGE("Failed to parse %s", fileName);
 		return false;
 	}
 
@@ -851,7 +858,7 @@ bool DefaultContentManager::loadArmyGunChoice()
 		&& readWeaponTable("army-gun-choice-extended.json", mExtendedGunChoice);
 }
 
-void DefaultContentManager::loadStringRes(const char *name, std::vector<const UTF8String*> &strings) const
+void DefaultContentManager::loadStringRes(const char *name, std::vector<const ST::string*> &strings) const
 {
 	std::string fullName(name);
 
@@ -877,7 +884,7 @@ void DefaultContentManager::loadStringRes(const char *name, std::vector<const UT
 	JsonUtility::parseListStrings(*json, utf8_encoded);
 	for (const std::string &str : utf8_encoded)
 	{
-		strings.push_back(new UTF8String(str.c_str()));
+		strings.push_back(new ST::string(str));
 	}
 }
 
@@ -922,7 +929,7 @@ rapidjson::Document* DefaultContentManager::readJsonDataFile(const char *fileNam
 	rapidjson::Document *document = new rapidjson::Document();
 	if (document->Parse<rapidjson::kParseCommentsFlag>(jsonData.c_str()).HasParseError())
 	{
-		SLOGE(DEBUG_TAG_DEFAULTCM, "Failed to parse '%s'", fileName);
+		SLOGE("Failed to parse '%s'", fileName);
 		delete document;
 		throw std::runtime_error(FormattedString("Failed to parse '%s'", fileName));
 	}
@@ -964,6 +971,10 @@ bool DefaultContentManager::loadAllDealersInventory()
 
 const ItemModel* DefaultContentManager::getItem(uint16_t itemIndex) const
 {
+	if(itemIndex >= m_items.size())
+	{
+		return nullptr;
+	}
 	return m_items[itemIndex];
 }
 
@@ -972,7 +983,7 @@ const ItemModel* DefaultContentManager::getItemByName(const std::string &interna
 	std::map<std::string, const ItemModel*>::const_iterator it = m_itemMap.find(internalName);
 	if(it == m_itemMap.end())
 	{
-		SLOGE(DEBUG_TAG_DEFAULTCM, "item '%s' is not found", internalName.c_str());
+		SLOGE("item '%s' is not found", internalName.c_str());
 		throw std::runtime_error(FormattedString("item '%s' is not found", internalName.c_str()));
 	}
 	return it->second;
@@ -983,11 +994,11 @@ const DealerInventory* DefaultContentManager::getDealerInventory(int dealerId) c
 	return m_dealersInventory[dealerId];
 }
 
-const UTF8String* DefaultContentManager::getMusicForMode(MusicMode mode) const {
+const ST::string* DefaultContentManager::getMusicForMode(MusicMode mode) const {
 	const uint32_t index = Random((uint32_t)m_musicMap.find(mode)->second->size());
-	const UTF8String* chosen = m_musicMap.find(mode)->second->at(index);
+	const ST::string* chosen = m_musicMap.find(mode)->second->at(index);
 
-	SLOGD(DEBUG_TAG_DEFAULTCM, "Choosing music index %d of %d for: '%s'", index, m_musicMap.find(mode)->second->size(), chosen->getUTF8());
+	SLOGD("Choosing music index %d of %d for: '%s'", index, m_musicMap.find(mode)->second->size(), chosen->c_str());
 	return chosen;
 }
 
@@ -1001,12 +1012,13 @@ const GamePolicy* DefaultContentManager::getGamePolicy() const
 	return m_gamePolicy;
 }
 
-const UTF8String* DefaultContentManager::getNewString(int stringId) const
+const ST::string* DefaultContentManager::getNewString(size_t stringId) const
 {
 	if(stringId >= m_newStrings.size())
 	{
-		SLOGE(DEBUG_TAG_DEFAULTCM, "new string %d is not found", stringId);
-		throw std::runtime_error(FormattedString("new string %d is not found", stringId));
+		ST::string message = ST::format("new string {} is not found", stringId);
+		SLOGE(message.c_str());
+		throw std::runtime_error(message.c_str());
 	}
 	else
 	{

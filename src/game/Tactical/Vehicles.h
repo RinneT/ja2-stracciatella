@@ -32,7 +32,7 @@ struct VEHICLETYPE
 	INT16   sGridNo; // location in tactical
 	SOLDIERTYPE *pPassengers[ 10 ];
 	BOOLEAN fDestroyed;
-	INT32   iMovementSoundID;
+	UINT32  uiMovementSoundID;
 	BOOLEAN fValid;
 };
 
@@ -50,7 +50,7 @@ extern VEHICLETYPE *pVehicleList;
 // number of vehicles on the list
 extern UINT8 ubNumberOfVehicles;
 
-#define VEHICLE2ID(v) (UINT32)((&(v) - pVehicleList))
+#define VEHICLE2ID(v) (INT32)((&(v) - pVehicleList))
 
 #define BASE_FOR_EACH_VEHICLE(type, iter)                           \
 	for (type* iter = pVehicleList,                      \

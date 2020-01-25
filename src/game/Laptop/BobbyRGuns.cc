@@ -22,8 +22,6 @@
 #include "ScreenIDs.h"
 #include "Font_Control.h"
 
-#include "sgp/UTF8String.h"
-
 #include "CalibreModel.h"
 #include "ContentManager.h"
 #include "GameInstance.h"
@@ -33,7 +31,10 @@
 #include "ContentManager.h"
 #include "GameInstance.h"
 #include "policy/GamePolicy.h"
-#include "slog/slog.h"
+#include "Logger.h"
+
+#include <algorithm>
+#include <iterator>
 
 #define BOBBYR_GRID_PIC_WIDTH		118
 #define BOBBYR_GRID_PIC_HEIGHT		69
@@ -205,7 +206,7 @@ static MOUSE_REGION gSelectedTitleImageLinkRegion;
 
 void GameInitBobbyRGuns()
 {
-	memset(&BobbyRayPurchases, 0, MAX_PURCHASE_AMOUNT);
+	std::fill_n(BobbyRayPurchases, MAX_PURCHASE_AMOUNT, BobbyRayPurchaseStruct{});
 }
 
 
@@ -487,6 +488,7 @@ void DisplayItemInfo(UINT32 uiItemClass)
 	}
 
 	const ItemModel* items[BOBBYR_NUM_WEAPONS_ON_PAGE];
+	std::fill(std::begin(items), std::end(items), nullptr);
 	for(i=gusCurWeaponIndex; ((i<=gusLastItemIndex) && (ubCount < 4)); i++)
 	{
 		if( uiItemClass == BOBBYR_USED_ITEMS )
@@ -727,18 +729,10 @@ static void DisplayBigItemImage(const ItemModel* item, const UINT16 PosY)
 
 static void DisplayArmourInfo(UINT16 usIndex, UINT16 usTextPosY, BOOLEAN fUsed, UINT16 usBobbyIndex)
 {
-	UINT16	usHeight;
-	UINT16 usFontHeight;
-	usFontHeight = GetFontHeight(BOBBYR_ITEM_DESC_TEXT_FONT);
-
-	//Display Items Name
-	//DisplayItemNameAndInfo(usTextPosY, usIndex, fUsed);
-
-	usHeight = usTextPosY;
-	//Display the weight, caliber, mag, rng, dam, rof text
+	UINT16 usFontHeight = GetFontHeight(BOBBYR_ITEM_DESC_TEXT_FONT);
 
 	//Display the Cost and the qty bought and on hand
-	usHeight = DisplayCostAndQty(usTextPosY, usIndex, usFontHeight, usBobbyIndex, fUsed);
+	DisplayCostAndQty(usTextPosY, usIndex, usFontHeight, usBobbyIndex, fUsed);
 }
 
 
@@ -862,7 +856,8 @@ static UINT16 DisplayCaliber(UINT16 usPosY, UINT16 usIndex, UINT16 usFontHeight)
 
 	// ammo or gun?
 	const CalibreModel *calibre = item->getItemClass() == IC_AMMO ? item->asAmmo()->calibre : item->asWeapon()->calibre;
-	wcslcpy(zTemp, &GCM->getCalibreNameForBobbyRay(calibre->index)->getWCHAR()[0], lengthof(zTemp));
+	ST::wchar_buffer name = GCM->getCalibreNameForBobbyRay(calibre->index)->to_wchar();;
+	wcslcpy(zTemp, name.c_str(), lengthof(zTemp)); // might not terminate with '\0'
 
 	ReduceStringLength(zTemp, lengthof(zTemp), BOBBYR_GRID_PIC_WIDTH, BOBBYR_ITEM_NAME_TEXT_FONT);
 	DrawTextToScreen(zTemp, BOBBYR_ITEM_WEIGHT_NUM_X, usPosY, BOBBYR_ITEM_WEIGHT_NUM_WIDTH, BOBBYR_ITEM_DESC_TEXT_FONT, BOBBYR_ITEM_DESC_TEXT_COLOR, FONT_MCOLOR_BLACK, RIGHT_JUSTIFIED);
@@ -1383,7 +1378,7 @@ static UINT8 CheckPlayersInventoryForGunMatchingGivenAmmoID(ItemModel const* con
 
 static void ReportBobbyROrderError(UINT16 usItemNumber, UINT8 ubPurchaseNum, UINT8 ubQtyOnHand, UINT8 ubNumPurchasing)
 {
-	SLOGE(DEBUG_TAG_BOBBYRAY, "**** Bobby Rays Ordering Error ****\n\
+	SLOGE("**** Bobby Rays Ordering Error ****\n\
 		usItemNumber = %d\n\
 		ubPurchaseNum = %d\n\
 		ubQtyOnHand = %d\n\

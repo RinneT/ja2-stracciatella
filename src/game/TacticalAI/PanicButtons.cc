@@ -174,7 +174,6 @@ void PossiblyMakeThisEnemyChosenOne( SOLDIERTYPE * pSoldier )
 		return;
 	}
 
-
 	bPanicTrigger = ClosestPanicTrigger( pSoldier );
 	if (bPanicTrigger == -1)
 	{
@@ -242,7 +241,7 @@ INT8 PanicAI(SOLDIERTYPE *pSoldier, UINT8 ubCanMove)
 			// if we have enough APs to activate it now
 			if (pSoldier->bActionPoints >= AP_USE_REMOTE)
 			{
-				SLOGD(DEBUG_TAG_AI, "%ls is activating his detonator",pSoldier->name);
+				SLOGD("%ls is activating his detonator",pSoldier->name);
 				// blow up all the PANIC bombs!
 				return(AI_ACTION_USE_DETONATOR);
 			}
@@ -300,7 +299,7 @@ INT8 PanicAI(SOLDIERTYPE *pSoldier, UINT8 ubCanMove)
 					{
 						// blow up the all the PANIC bombs (or just the journal)
 						pSoldier->usActionData = sPanicTriggerGridNo;
-						SLOGD(DEBUG_TAG_AI, "%s pulls panic trigger at grid %d",
+						SLOGD("%s pulls panic trigger at grid %d",
 									pSoldier->name,pSoldier->usActionData);
 						return(AI_ACTION_PULL_TRIGGER);
 					}
@@ -325,7 +324,7 @@ INT8 PanicAI(SOLDIERTYPE *pSoldier, UINT8 ubCanMove)
 						}
 						else       // Oh oh, the chosen one can't get to the trigger!
 						{
-							SLOGD(DEBUG_TAG_AI, "!legalDest - ChosenOne can't get to the trigger!");
+							SLOGD("!legalDest - ChosenOne can't get to the trigger!");
 							gTacticalStatus.the_chosen_one = NULL; // strip him of his Chosen One status
 							MakeClosestEnemyChosenOne();     // and replace him!
 						}
@@ -339,7 +338,7 @@ INT8 PanicAI(SOLDIERTYPE *pSoldier, UINT8 ubCanMove)
 			}
 			else     // Oh oh, the chosen one can't get to the trigger!
 			{
-				SLOGD(DEBUG_TAG_AI, "!adjacentFound - ChosenOne can't get to the trigger!");
+				SLOGD("!adjacentFound - ChosenOne can't get to the trigger!");
 				gTacticalStatus.the_chosen_one = NULL; // strip him of his Chosen One status
 				MakeClosestEnemyChosenOne();   // and replace him!
 			}
@@ -364,6 +363,12 @@ INT8 ClosestPanicTrigger( SOLDIERTYPE * pSoldier )
 	INT16		sClosestDistance = 1000;
 	INT8		bClosestTrigger = -1;
 	UINT32	uiPercentEnemiesKilled;
+
+	if (pSoldier->bTeam != ENEMY_TEAM)
+	{
+		// uiPercentEnemiesKilled assumes we're fighting the army (see #851)
+		return( -1 );
+	}
 
 	uiPercentEnemiesKilled = (UINT32)( 100 * (UINT32)(gTacticalStatus.ubArmyGuysKilled) / (UINT32)( gTacticalStatus.Team[ ENEMY_TEAM ].bMenInSector + gTacticalStatus.ubArmyGuysKilled ) );
 
@@ -418,7 +423,11 @@ BOOLEAN NeedToRadioAboutPanicTrigger( void )
 		return( FALSE );
 	}
 
-	if (!IsTeamActive(ENEMY_TEAM)) return FALSE;
+	if (!IsTeamActive(ENEMY_TEAM))
+	{
+		// uiPercentEnemiesKilled assumes we're fighting the army (see #851)
+		return( FALSE );
+	}
 
 	if ( gWorldSectorX == TIXA_SECTOR_X && gWorldSectorY == TIXA_SECTOR_Y )
 	{

@@ -57,7 +57,6 @@
 #include "GameInstance.h"
 #include "MercProfile.h"
 #include "content/Dialogs.h"
-#include "sgp/UTF8String.h"
 
 #define QUOTE_MESSAGE_SIZE			520
 
@@ -394,7 +393,7 @@ void HandleDialogue()
 		{
 			f.uiFlags &= ~FACE_MODAL;
 			EndModalTactical();
-			SLOGD(DEBUG_TAG_INTERFACE, "Ending Modal Tactical Quote.");
+			SLOGD("Ending Modal Tactical Quote.");
 		}
 
 		if (f.uiFlags & FACE_TRIGGER_PREBATTLE_INT)
@@ -886,10 +885,11 @@ static BOOLEAN GetDialogue(const MercProfile &profile, UINT16 usQuoteNum, wchar_
 		bool success = false;
 		try
 		{
-			UTF8String* quote = GCM->loadDialogQuoteFromFile(pFilename, usQuoteNum);
+			ST::string* quote = GCM->loadDialogQuoteFromFile(pFilename, usQuoteNum);
 			if(quote)
 			{
-				wcsncpy(zDialogueText, quote->getWCHAR().data(), Length);
+				ST::wchar_buffer buf = quote->to_wchar();
+				wcsncpy(zDialogueText, buf.c_str(), Length); // might not terminate with '\0'
 				delete quote;
 				success = zDialogueText[0] != L'\0';
 			}
@@ -1137,7 +1137,7 @@ void HandleDialogueEnd(FACETYPE& f)
 
 		if (f.fTalking)
 		{
-			SLOGD(DEBUG_TAG_INTERFACE, "HandleDialogueEnd() face still talking." );
+			SLOGD("HandleDialogueEnd() face still talking." );
 			return;
 		}
 
@@ -1440,7 +1440,7 @@ void SayQuoteFromNearbyMercInSector(GridNo const gridno, INT8 const distance, UI
 			continue;
 		if (!SoldierTo3DLocationLineOfSightTest(&s, gridno, 0, 0, MaxDistanceVisible(), TRUE))
 			continue;
-		if (quote_id == QUOTE_STUFF_MISSING_DRASSEN && Random(100) > EffectiveWisdom(&s))
+		if (quote_id == QUOTE_STUFF_MISSING_DRASSEN && static_cast<INT8>(Random(100)) > EffectiveWisdom(&s))
 			continue;
 		mercs_in_sector[n_mercs++] = &s;
 	}
@@ -1597,7 +1597,7 @@ static void CheckForStopTimeQuotes(UINT16 const usQuoteNum)
 	// Stop Time, game
 	EnterModalTactical(TACTICAL_MODAL_NOMOUSE);
 	gpCurrentTalkingFace->uiFlags |= FACE_MODAL;
-	SLOGD(DEBUG_TAG_INTERFACE, "Starting Modal Tactical Quote.");
+	SLOGD("Starting Modal Tactical Quote.");
 }
 
 
@@ -1630,7 +1630,7 @@ UINT8 GetQuoteBitNumberFromQuoteID(UINT32 const uiQuoteID)
 	for (size_t i = 0; i != lengthof(gubMercValidPrecedentQuoteID); ++i)
 	{
 		if (gubMercValidPrecedentQuoteID[i] == uiQuoteID)
-			return i;
+			return static_cast<UINT8>(i);
 	}
 	return 0;
 }

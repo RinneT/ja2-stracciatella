@@ -11,7 +11,6 @@
 #include "game/Utils/Font_Control.h"
 #include "game/Utils/Message.h"
 #include "game/Utils/Text.h"
-#include "sgp/UTF8String.h"
 
 #include "ContentManager.h"
 #include "GameInstance.h"
@@ -19,7 +18,7 @@
 #include "content/npcs.h"
 #include "internals/enums.h"
 
-#include "slog/slog.h"
+#include "Logger.h"
 
 /** Get soldier object from the structure. */
 std::shared_ptr<Soldier> GetSoldier(struct SOLDIERTYPE* s)
@@ -43,7 +42,7 @@ void Soldier::removePendingAction()
 {
 	if(mSoldier->ubPendingAction != NO_PENDING_ACTION)
 	{
-		SLOGI(DEBUG_TAG_SOLDIER, "%s: remove pending action %s",
+		SLOGI("%s: remove pending action %s",
 			getPofileName(),
 			Internals::getActionName(mSoldier->ubPendingAction));
 
@@ -66,7 +65,7 @@ bool Soldier::hasPendingAction() const
 
 void Soldier::setPendingAction(UINT8 action)
 {
-	SLOGI(DEBUG_TAG_SOLDIER, "%s: set pending action %s (previous %s)",
+	SLOGI("%s: set pending action %s (previous %s)",
 		getPofileName(),
 		Internals::getActionName(action),
 		Internals::getActionName(mSoldier->ubPendingAction));
@@ -242,16 +241,14 @@ static bool isHeadPosition(int8_t pos)
 
 static void showGearEquipMessage(const SOLDIERTYPE* s, uint16_t usItem)
 {
-	ScreenMsg(FONT_MCOLOR_LTYELLOW, MSG_INTERFACE,
-			GCM->getNewString(NS_SOLDIER_EQUIPS_ITEM)->getWCHAR().data(),
-			s->name, ItemNames[usItem]);
+	ST::wchar_buffer msg = GCM->getNewString(NS_SOLDIER_EQUIPS_ITEM)->to_wchar();
+	ScreenMsg(FONT_MCOLOR_LTYELLOW, MSG_INTERFACE, msg.c_str(), s->name, ItemNames[usItem]);
 }
 
 static void showGearRemoveMessage(const SOLDIERTYPE* s, uint16_t usItem)
 {
-	ScreenMsg(FONT_MCOLOR_LTYELLOW, MSG_INTERFACE,
-			GCM->getNewString(NS_SOLDIER_REMOVES_ITEM)->getWCHAR().data(),
-			s->name, ItemNames[usItem]);
+	ST::wchar_buffer msg = GCM->getNewString(NS_SOLDIER_REMOVES_ITEM)->to_wchar();
+	ScreenMsg(FONT_MCOLOR_LTYELLOW, MSG_INTERFACE, msg.c_str(), s->name, ItemNames[usItem]);
 }
 
 void Soldier::putNightHeadGear()

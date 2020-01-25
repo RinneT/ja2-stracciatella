@@ -1,11 +1,12 @@
 #ifndef LOADSAVEDATA_H
 #define LOADSAVEDATA_H
 
-#include <string>
-
 #include "Types.h"
-#include "UTF8String.h"
 #include "IEncodingCorrector.h"
+
+#include <string_theory/string>
+
+#include <algorithm>
 
 #define EXTR_STR(S, D, Size)  memcpy((D), (S), Size); (S) += (Size);
 #define EXTR_BOOLA(S, D, Size) memcpy((D), (S), Size); (S) += (Size);
@@ -42,7 +43,7 @@
  * @param string        String to encode
  * @param outputBuf     Output buffer for the encoded string
  * @param charsToWrite  Number of characters to write (at least one trailing 0x0000 will be written) */
-void wchar_to_utf16(const wchar_t *string, void *outputBuf, int charsToWrite);
+void wchar_to_utf16(const wchar_t *string, void *outputBuf, size_t charsToWrite);
 
 /** Class for serializing data (writing them into stream of bytes). */
 class DataWriter
@@ -59,7 +60,7 @@ public:
 	 *
 	 * @param string      String to write
 	 * @param numChars    Number of characters to write. */
-	void writeStringAsUTF16(const wchar_t *string, int numChars);
+	void writeStringAsUTF16(const wchar_t *string, size_t numChars);
 
 	void writeU8 (uint8_t  value);        /**< Write uint8_t */
 	void writeU16(uint16_t value);        /**< Write uint16_t */
@@ -94,22 +95,22 @@ public:
 	/** Read UTF-16 encoded string.
 	 * @param numChars Number of characters to read.
 	 * @param fixer Optional encoding corrector.  It is used for fixing incorrectly encoded text. */
-	UTF8String readUTF16(int numChars, const IEncodingCorrector *fixer=NULL);
+	ST::string readUTF16(size_t numChars, const IEncodingCorrector *fixer=NULL);
 
 	/** Read UTF-32 encoded string.
 	 * @param numChars Number of characters to read. */
-	UTF8String readUTF32(int numChars);
+	ST::string readUTF32(size_t numChars);
 
 	/** Read UTF-16 encoded string into wide string buffer.
 	 * @param buffer Buffer to read data in.
 	 * @param numChars Number of characters to read.
 	 * @param fixer Optional encoding corrector.  It is used for fixing incorrectly encoded text. */
-	void readUTF16(wchar_t *buffer, int numChars, const IEncodingCorrector *fixer=NULL);
+	void readUTF16(wchar_t *buffer, size_t numChars, const IEncodingCorrector *fixer=NULL);
 
 	/** Read UTF-32 encoded string into wide string buffer.
 	 * @param buffer Buffer to read data in.
 	 * @param numChars Number of characters to read. */
-	void readUTF32(wchar_t *buffer, int numChars);
+	void readUTF32(wchar_t *buffer, size_t numChars);
 
 	uint8_t  readU8();            /**< Read uint8_t */
 	uint16_t readU16();           /**< Read uint16_t */
@@ -147,10 +148,10 @@ protected:
 #define INJ_FLOAT(D, S)  *(  FLOAT*)(D) = (S); (D) += sizeof(FLOAT);
 #define INJ_DOUBLE(D, S) *( DOUBLE*)(D) = (S); (D) += sizeof(DOUBLE);
 #define INJ_PTR(D, S) INJ_SKIP(D, 4)
-#define INJ_SKIP(D, Size) memset(D, 0, Size); (D) += Size;
-#define INJ_SKIP_I16(D)   memset(D, 0, 2);    (D) += 2;
-#define INJ_SKIP_I32(D)   memset(D, 0, 4);    (D) += 4;
-#define INJ_SKIP_U8(D)    memset(D, 0, 1);    (D) += 1;
+#define INJ_SKIP(D, Size) std::fill_n(D, Size, 0); (D) += Size;
+#define INJ_SKIP_I16(D)   std::fill_n(D, 2, 0);    (D) += 2;
+#define INJ_SKIP_I32(D)   std::fill_n(D, 4, 0);    (D) += 4;
+#define INJ_SKIP_U8(D)    std::fill_n(D, 1, 0);    (D) += 1;
 #define INJ_SOLDIER(D, S) *(SoldierID*)(D) = Soldier2ID((S)); (D) += sizeof(SoldierID);
 #define INJ_VEC3(D, S) INJ_FLOAT(D, (S).x); INJ_FLOAT(D, (S).y); INJ_FLOAT(D, (S).z);
 

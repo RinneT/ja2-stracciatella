@@ -77,7 +77,7 @@
 #include "Video.h"
 #include "VObject_Blitters.h"
 #include "UILayout.h"
-#include "slog/slog.h"
+#include "Logger.h"
 
 
 #include "ContentManager.h"
@@ -212,7 +212,7 @@ static void EditModeInit(void)
 {
 	UINT32 x;
 
-	SLOGI(DEBUG_TAG_EDITOR, "Entering editor mode...");
+	SLOGI("Entering editor mode...");
 
 	gfRealGunNut = gGameOptions.fGunNut;
 	gGameOptions.fGunNut = TRUE;
@@ -346,7 +346,7 @@ static void EditModeInit(void)
 	}
 	else
 	{
-		SLOGD(DEBUG_TAG_EDITOR, "Creating summary window...");
+		SLOGD("Creating summary window...");
 		CreateSummaryWindow();
 		gfNeedToInitGame = TRUE;
 	}
@@ -361,7 +361,7 @@ static void EditModeInit(void)
 
 	gfIntendOnEnteringEditor = FALSE;
 
-	SLOGD(DEBUG_TAG_EDITOR, "Finished entering editor mode...");
+	SLOGD("Finished entering editor mode...");
 }
 
 
@@ -495,7 +495,7 @@ static void SetBackgroundTexture(void)
 		RemoveAllLandsOfTypeRange( cnt, FIRSTTEXTURE, DEEPWATERTEXTURE );
 
 		// Add level
-		usIndex = (UINT16)(rand( ) % 10 );
+		usIndex = (UINT16)Random(10);
 
 		// Adjust for type
 		usIndex += gTileTypeStartIndex[ gCurrentBackground ];
@@ -551,7 +551,7 @@ static BOOLEAN DoWindowSelection(void)
 //in the world.
 static void RemoveTempMouseCursorObject(void)
 {
-	if ( iCurBankMapIndex < 0x8000 )
+	if ( iCurBankMapIndex < GRIDSIZE )
 	{
 		ForceRemoveStructFromTail( iCurBankMapIndex );
 		gCursorNode = NULL;
@@ -642,7 +642,7 @@ static BOOLEAN DrawTempMouseCursorObject(void)
 	if (pos == NOWHERE) return FALSE;
 
 	iCurBankMapIndex = pos;
-	if (iCurBankMapIndex >= 0x8000) return FALSE;
+	if (iCurBankMapIndex >= GRIDSIZE) return FALSE;
 
 	//Hook into the smart methods to override the selection window methods.
 	switch (iDrawMode)
@@ -1409,7 +1409,7 @@ static void HandleKeyboardShortcuts(void)
 
 				case SDLK_F4:
 					MusicPlay( GCM->getMusicForMode(giMusicMode) );
-					SLOGD(DEBUG_TAG_EDITOR, "Testing music %s", GCM->getMusicForMode(giMusicMode));
+					SLOGD("Testing music %s", GCM->getMusicForMode(giMusicMode));
 					giMusicMode = (MusicMode)(giMusicMode + 1);
 					if( giMusicMode >= MAX_MUSIC_MODES )
 						giMusicMode = MUSIC_MAIN_MENU;
@@ -1441,7 +1441,7 @@ static void HandleKeyboardShortcuts(void)
 								RemoveAllRoofsOfTypeRange( i, FIRSTTEXTURE, LASTITEM );
 								RemoveAllOnRoofsOfTypeRange( i, FIRSTTEXTURE, LASTITEM );
 								RemoveAllShadowsOfTypeRange( i, FIRSTROOF, LASTSLANTROOF );
-								usRoofIndex = 9 + ( rand() % 3 );
+								usRoofIndex = 9 + Random(3);
 								UINT16 usTileIndex = GetTileIndexFromTypeSubIndex(usRoofType, usRoofIndex);
 								AddRoofToHead( i, usTileIndex );
 							}
@@ -1762,6 +1762,7 @@ static void HandleKeyboardShortcuts(void)
 					if( gusPreserveSelectionWidth > 8 )
 						gusPreserveSelectionWidth = 1;
 					gfRenderTaskbar = TRUE;
+					break;
 				default:
 					iCurrentAction = ACTION_NULL;
 					break;
@@ -1808,7 +1809,7 @@ static ScreenID PerformSelectedAction(void)
 			if (gViewportRegion.uiFlags & MSYS_MOUSE_IN_AREA)
 			{
 				const UINT32 pos = GetMouseMapPos();
-				if (pos != NOWHERE && pos < 0x8000)
+				if (pos != NOWHERE && pos < GRIDSIZE)
 				{
 					QuickEraseMapTile(pos);
 				}
@@ -1817,6 +1818,7 @@ static ScreenID PerformSelectedAction(void)
 
 		case ACTION_QUIT_GAME:
 			requestGameExit();
+			break;
 		case ACTION_EXIT_EDITOR:
 			if( EditModeShutdown( ) )
 			{
@@ -2403,6 +2405,7 @@ static ScreenID WaitForSelectionWindowResponse(void)
 
 				case SDLK_ESCAPE:
 					RestoreSelectionList();
+					// fallthrough
 				case SDLK_RETURN:
 					fAllDone = TRUE;
 					break;
@@ -2459,7 +2462,7 @@ try
 		if (!l)
 		{
 			// Can't create sprite
-			SLOGW(DEBUG_TAG_EDITOR, "PlaceLight: Can't create light sprite of radius %d", radius);
+			SLOGW("PlaceLight: Can't create light sprite of radius %d", radius);
 			return FALSE;
 		}
 	}
@@ -3004,11 +3007,13 @@ static BOOLEAN DoIRenderASpecialMouseCursor(void)
 			case DRAW_MODE_OSTRUCTS2:
 				if(CheckForFences())
 					fDontUseRandom = TRUE;
+				// fallthrough
 			case DRAW_MODE_DEBRIS:							// These only show if you first hit PGUP/PGDOWN keys
 			case DRAW_MODE_OSTRUCTS:
 			case DRAW_MODE_OSTRUCTS1:
 				if(!fDontUseRandom)
 					break;
+				// fallthrough
 			case DRAW_MODE_BANKS:
 			case DRAW_MODE_ROADS:
 			case DRAW_MODE_WALLS:
@@ -3218,7 +3223,7 @@ ScreenID EditScreenHandle(void)
 
 	if( gfWorldLoaded && gMapInformation.ubMapVersion <= 7 && !gfCorruptMap )
 	{
-		SLOGE(DEBUG_TAG_EDITOR, "Map data has just been corrupted. Don't save, don't quit, get Kris!  If he's not here, save the map using a temp filename and document everything you just did, especially your last action!" );
+		SLOGE("Map data has just been corrupted. Don't save, don't quit, get Kris!  If he's not here, save the map using a temp filename and document everything you just did, especially your last action!" );
 		gfCorruptMap = TRUE;
 	}
 	if( gfWorldLoaded && gubScheduleID > 40 && !gfCorruptSchedules )
@@ -3226,7 +3231,7 @@ ScreenID EditScreenHandle(void)
 		OptimizeSchedules();
 		if( gubScheduleID > 32 )
 		{
-			SLOGE(DEBUG_TAG_EDITOR, "Schedule data has just been corrupted. Don't save, don't quit, get Kris!  If he's not here, save the map using a temp filename and document everything you just did, especially your last action!" );
+			SLOGE("Schedule data has just been corrupted. Don't save, don't quit, get Kris!  If he's not here, save the map using a temp filename and document everything you just did, especially your last action!" );
 			gfCorruptSchedules = TRUE;
 		}
 	}

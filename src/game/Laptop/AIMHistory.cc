@@ -15,6 +15,8 @@
 #include "ContentManager.h"
 #include "GameInstance.h"
 
+#include <algorithm>
+
 // Defines
 
 #define NUM_AIM_HISTORY_PAGES			5
@@ -95,7 +97,7 @@ enum AimHistoryTextLocations
 
 void EnterInitAimHistory()
 {
-	memset( &AimHistorySubPagesVisitedFlag, 0, NUM_AIM_HISTORY_PAGES);
+	std::fill_n(AimHistorySubPagesVisitedFlag, NUM_AIM_HISTORY_PAGES, 0);
 }
 
 
@@ -382,7 +384,7 @@ static void BtnHistoryMenuButtonCallback(GUI_BUTTON *btn, INT32 reason)
 				break;
 
 			case 4: //Next Page
-				if (gubCurPageNum < NUM_AIM_HISTORY_PAGES)
+				if (gubCurPageNum + 1 < NUM_AIM_HISTORY_PAGES)
 				{
 					gubCurPageNum++;
 					ChangingAimHistorySubPage(gubCurPageNum);

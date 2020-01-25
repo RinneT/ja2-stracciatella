@@ -6,13 +6,13 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include "FileMan.h"
-#include "LibraryDataBase.h"
+#include "RustInterface.h"
 #include "MemMan.h"
 #include "PODObj.h"
 
 #include "boost/filesystem.hpp"
 
-#include "slog/slog.h"
+#include "Logger.h"
 
 #if _WIN32
 #include <shlobj.h>
@@ -45,7 +45,6 @@ enum FileOpenFlags
 	FILE_ACCESS_READWRITE = FILE_ACCESS_READ | FILE_ACCESS_WRITE,
 	FILE_ACCESS_APPEND    = 1U << 2
 };
-ENUM_BITSET(FileOpenFlags)
 
 
 static void SetFileManCurrentDirectory(char const* const pcDirectory);
@@ -98,7 +97,7 @@ std::string FileMan::switchTmpFolder(std::string home)
 	std::string tmpPath = FileMan::joinPaths(home, LOCAL_CURRENT_DIR);
 	if (mkdir(tmpPath.c_str(), 0700) != 0 && errno != EEXIST)
 	{
-		SLOGE(DEBUG_TAG_FILEMAN, "Unable to create tmp directory '%s'", tmpPath.c_str());
+		SLOGE("Unable to create tmp directory '%s'", tmpPath.c_str());
 		throw std::runtime_error("Unable to create tmp directory");
 	}
 	else
@@ -202,7 +201,7 @@ void FileClose(SGPFile* f)
 	}
 	else
 	{
-		CloseLibraryFile(&f->u.lib);
+		LibraryFile_close(f->u.lib);
 	}
 	MemFree(f);
 }
@@ -216,7 +215,7 @@ void FileRead(SGPFile* const f, void* const pDest, size_t const uiBytesToRead)
 	}
 	else
 	{
-		ret = LoadDataFromLibrary(&f->u.lib, pDest, (UINT32)uiBytesToRead);
+		ret = LibraryFile_read(f->u.lib, static_cast<uint8_t *>(pDest), uiBytesToRead);
 	}
 
 	if (!ret) throw std::runtime_error("Reading from file failed");
@@ -321,7 +320,7 @@ void FileSeek(SGPFile* const f, INT32 distance, FileSeekMode const how)
 	}
 	else
 	{
-		success = LibraryFileSeek(&f->u.lib, distance, how);
+		success = LibraryFile_seek(f->u.lib, distance, how);
 	}
 	if (!success) throw std::runtime_error("Seek in file failed");
 }
@@ -329,7 +328,7 @@ void FileSeek(SGPFile* const f, INT32 distance, FileSeekMode const how)
 
 INT32 FileGetPos(const SGPFile* f)
 {
-	return f->flags & SGPFILE_REAL ? (INT32)ftell(f->u.file) : f->u.lib.uiFilePosInFile;
+	return f->flags & SGPFILE_REAL ? (INT32)ftell(f->u.file) : (INT32)LibraryFile_getPosition(f->u.lib);
 }
 
 
@@ -346,7 +345,7 @@ UINT32 FileGetSize(const SGPFile* f)
 	}
 	else
 	{
-		return f->u.lib.pFileHeader->uiFileLength;
+		return (UINT32)LibraryFile_getSize(f->u.lib);
 	}
 }
 
@@ -459,14 +458,14 @@ INT32 CompareSGPFileTimes(const time_t* const pFirstFileTime, const time_t* cons
 
 FILE* GetRealFileHandleFromFileManFileHandle(const SGPFile* f)
 {
-	return f->flags & SGPFILE_REAL ? f->u.file : f->u.lib.lib->hLibraryHandle;
+	return f->flags & SGPFILE_REAL ? f->u.file : nullptr;
 }
 
 uintmax_t GetFreeSpaceOnHardDriveWhereGameIsRunningFrom(void)
 {
 	using namespace boost::filesystem;
 	space_info si = space(current_path());
-	if (si.available == -1)
+	if (si.available == static_cast<uintmax_t>(-1))
 	{
 		/* something is wrong, tell everyone no space available */
 		return 0;
@@ -563,7 +562,7 @@ bool FileMan::findObjectCaseInsensitive(const char *directory, const char *name,
 		}
 	}
 
-	// SLOGI(DEBUG_TAG_FILEMAN,"Looking for %s/[ %s ] : %s", directory, name, result ? "success" : "failure");
+	// SLOGI("Looking for %s/[ %s ] : %s", directory, name, result ? "success" : "failure");
 	return result;
 }
 #endif
@@ -792,8 +791,8 @@ int FileMan::openFileForReading(const char *filename, int mode)
 /** Replace all \ with / */
 void FileMan::slashifyPath(std::string &path)
 {
-	int len = path.size();
-	for(int i = 0; i < len; i++)
+	size_t len = path.size();
+	for(size_t i = 0; i < len; i++)
 	{
 		if(path[i] == '\\')
 		{

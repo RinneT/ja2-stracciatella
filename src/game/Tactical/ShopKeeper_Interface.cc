@@ -67,6 +67,8 @@
 #include "WeaponModels.h"
 #include "policy/GamePolicy.h"
 
+#include <algorithm>
+
 #define SKI_BUTTON_FONT				MILITARYFONT1//FONT14ARIAL
 #define SKI_BUTTON_COLOR				73
 
@@ -631,8 +633,8 @@ static void EnterShopKeeperInterface(void)
 				MSYS_PRIORITY_HIGH-1,
 				CURSOR_NORMAL, MSYS_NO_CALLBACK, SelectArmsDealersFaceRegionCallBack);
 
-	memset( ArmsDealerOfferArea, 0, sizeof( INVENTORY_IN_SLOT ) * SKI_NUM_TRADING_INV_SLOTS );
-	memset( PlayersOfferArea, 0, sizeof( INVENTORY_IN_SLOT ) * SKI_NUM_TRADING_INV_SLOTS );
+	std::fill_n(ArmsDealerOfferArea, SKI_NUM_TRADING_INV_SLOTS, INVENTORY_IN_SLOT{});
+	std::fill_n(PlayersOfferArea, SKI_NUM_TRADING_INV_SLOTS, INVENTORY_IN_SLOT{});
 
 
 	if( ArmsDealerInfo[ gbSelectedArmsDealerID ].ubTypeOfArmsDealer == ARMS_DEALER_REPAIRS )
@@ -644,9 +646,9 @@ static void EnterShopKeeperInterface(void)
 	//Setup the currently selected arms dealer
 	InitializeShopKeeper( TRUE );
 
-	memset( &gMoveingItem, 0, sizeof( INVENTORY_IN_SLOT ) );
+	gMoveingItem = INVENTORY_IN_SLOT{};
 
-	memset( &gfCommonQuoteUsedThisSession, FALSE, sizeof( gfCommonQuoteUsedThisSession ) );
+	std::fill(std::begin(gfCommonQuoteUsedThisSession), std::end(gfCommonQuoteUsedThisSession), FALSE);
 
 	//Init the shopkeepers face
 	InitShopKeepersFace( ArmsDealerInfo[ gbSelectedArmsDealerID ].ubShopKeeperID );
@@ -706,7 +708,7 @@ static void EnterShopKeeperInterface(void)
 		}
 
 		//Clear the contents of the structure
-		memset( &gItemToAdd, 0, sizeof( ITEM_TO_ADD_AFTER_SKI_OPEN ) );
+		gItemToAdd = ITEM_TO_ADD_AFTER_SKI_OPEN{};
 		gItemToAdd.fActive = FALSE;
 	}
 
@@ -1746,7 +1748,7 @@ void EnterShopKeeperInterfaceScreen( UINT8 ubArmsDealer )
 
 	if( gbSelectedArmsDealerID == -1 )
 	{
-		SLOGW(DEBUG_TAG_INTERFACE, "Failed to find Arms Dealer ID From Merc ID #%d", ubArmsDealer );
+		SLOGW("Failed to find Arms Dealer ID From Merc ID #%d", ubArmsDealer );
 		gfSKIScreenExit = TRUE;
 	}
 
@@ -2344,7 +2346,7 @@ static BOOLEAN RepairIsDone(UINT16 usItemIndex, UINT8 ubElement)
 
 
 	// make a new shopkeeper invslot item out of it
-	memset( &RepairItem, 0, sizeof( INVENTORY_IN_SLOT ) );
+	RepairItem = INVENTORY_IN_SLOT{};
 
 	RepairItem.fActive = TRUE;
 	RepairItem.sItemIndex = usItemIndex;
@@ -3401,7 +3403,7 @@ static void MoveAllArmsDealersItemsInOfferAreaToPlayersOfferArea(void)
 
 			//Remove the items from the Shopkeepers Offer area
 			if( !RemoveItemFromArmsDealerOfferArea( (UINT8)uiCnt, FALSE ) )//a->bSlotIdInOtherLocation
-				SLOGE(DEBUG_TAG_ASSERTS, "MoveAllArmsDealersItemsInOfferAreaToPlayersOfferArea: problem removing an item from dealers offer area");
+				SLOGA("MoveAllArmsDealersItemsInOfferAreaToPlayersOfferArea: problem removing an item from dealers offer area");
 
 			Assert(!a->fActive);
 		}
@@ -3495,6 +3497,7 @@ static void DisableAllDealersOfferSlots(void);
 
 void BeginSkiItemPointer( UINT8 ubSource, INT8 bSlotNum, BOOLEAN fOfferToDealerFirst )
 {
+	BOOLEAN fRestrictMouseToRect = FALSE;
 	SGPRect Rect;
 	OBJECTTYPE TempObject;
 
@@ -3509,7 +3512,7 @@ void BeginSkiItemPointer( UINT8 ubSource, INT8 bSlotNum, BOOLEAN fOfferToDealerF
 	{
 		case ARMS_DEALER_INVENTORY:
 			//Should never get in here
-			SLOGE(DEBUG_TAG_ASSERTS, "BeginSkiItemPointer: invalid Source");
+			SLOGA("BeginSkiItemPointer: invalid Source");
 			return;
 
 		case ARMS_DEALER_OFFER_AREA:
@@ -3527,6 +3530,7 @@ void BeginSkiItemPointer( UINT8 ubSource, INT8 bSlotNum, BOOLEAN fOfferToDealerF
 			Rect.iTop = SKI_DEALER_OFFER_AREA_Y;
 			Rect.iRight = SKI_ITEM_MOVEMENT_AREA_X + SKI_ITEM_MOVEMENT_AREA_WIDTH;
 			Rect.iBottom = SKI_ITEM_MOVEMENT_AREA_Y + SKI_ITEM_MOVEMENT_AREA_HEIGHT;
+			fRestrictMouseToRect = TRUE;
 
 			SOLDIERTYPE* const owner = GetMovingItemOwner();
 			SetItemPointer(&gMoveingItem.ItemObject, owner);
@@ -3563,6 +3567,7 @@ void BeginSkiItemPointer( UINT8 ubSource, INT8 bSlotNum, BOOLEAN fOfferToDealerF
 			Rect.iTop = SKI_ITEM_MOVEMENT_AREA_Y;
 			Rect.iRight = SKI_ITEM_MOVEMENT_AREA_X + SKI_ITEM_MOVEMENT_AREA_WIDTH;
 			Rect.iBottom = SKI_ITEM_MOVEMENT_AREA_Y + SKI_ITEM_MOVEMENT_AREA_HEIGHT;
+			fRestrictMouseToRect = TRUE;
 
 			SOLDIERTYPE* const owner = GetMovingItemOwner();
 			SetItemPointer(&gMoveingItem.ItemObject, owner);
@@ -3599,7 +3604,7 @@ void BeginSkiItemPointer( UINT8 ubSource, INT8 bSlotNum, BOOLEAN fOfferToDealerF
 				// items in an inventory slot.  However, that leads to other bugs: if you picked the thing you're swapping in from
 				// a restricted inv slot (headgear, vest, etc.), the item swapped out will end up belonging to an illegal slot, and
 				// return there with a right click on it in the player's offer area.  So now ALL items picked up here are unowned.
-				memset( &gMoveingItem, 0, sizeof( INVENTORY_IN_SLOT ) );
+				gMoveingItem = INVENTORY_IN_SLOT{};
 
 				//Get the item from the pointer
 				gMoveingItem.ItemObject = TempObject;
@@ -3618,6 +3623,7 @@ void BeginSkiItemPointer( UINT8 ubSource, INT8 bSlotNum, BOOLEAN fOfferToDealerF
 				Rect.iTop = SKI_ITEM_MOVEMENT_AREA_Y;
 				Rect.iRight = SKI_ITEM_MOVEMENT_AREA_X + SKI_ITEM_MOVEMENT_AREA_WIDTH;
 				Rect.iBottom = SKI_ITEM_MOVEMENT_AREA_Y + SKI_ITEM_MOVEMENT_AREA_HEIGHT;
+				fRestrictMouseToRect = TRUE;
 
 				SetItemPointer(&gMoveingItem.ItemObject, gpSMCurrentMerc);
 			}
@@ -3637,7 +3643,10 @@ void BeginSkiItemPointer( UINT8 ubSource, INT8 bSlotNum, BOOLEAN fOfferToDealerF
 		//Enable the region that limits the movement of the cursor with the item
 		gSkiInventoryMovementAreaMouseRegions.Enable();
 
-		RestrictMouseCursor( &Rect );
+		if ( fRestrictMouseToRect )
+		{
+			RestrictMouseCursor( &Rect );
+		}
 
 		DisableAllDealersInventorySlots();
 
@@ -3722,7 +3731,7 @@ void SetSkiCursor( UINT16 usCursor )
 	//else we are restoring the old cursor
 	else
 	{
-		memset( &gMoveingItem, 0, sizeof( INVENTORY_IN_SLOT ) );
+		gMoveingItem = INVENTORY_IN_SLOT{};
 
 		gpItemPointer = NULL;
 
@@ -3797,7 +3806,7 @@ static INT8 AddInventoryToSkiLocation(const INVENTORY_IN_SLOT* pInv, UINT8 ubSpo
 		case ARMS_DEALER_INVENTORY:
 		case PLAYERS_INVENTORY:
 			// not used this way
-			SLOGE(DEBUG_TAG_ASSERTS, "AddInventoryToSkiLocation: invalid Where");
+			SLOGA("AddInventoryToSkiLocation: invalid Where");
 			return( bSlotAddedTo );
 
 		case ARMS_DEALER_OFFER_AREA:
@@ -4564,7 +4573,7 @@ static INT8 GetInvSlotOfUnfullMoneyInMercInventory(SOLDIERTYPE* pSoldier)
 static void ClearArmsDealerOfferSlot(INT32 ubSlotToClear)
 {
 	// Clear the contents
-	memset( &ArmsDealerOfferArea[ ubSlotToClear ], 0, sizeof( INVENTORY_IN_SLOT ) );
+	ArmsDealerOfferArea[ ubSlotToClear ] = INVENTORY_IN_SLOT{};
 
 	//Remove the mouse help text from the region
 	gDealersOfferSlotsMouseRegions[ubSlotToClear].SetFastHelpText(L"");
@@ -4583,7 +4592,7 @@ static void CheckAndHandleClearingOfPlayerOfferArea(void);
 static void ClearPlayersOfferSlot(INT32 ubSlotToClear)
 {
 	// Clear the contents
-	memset( &PlayersOfferArea[ ubSlotToClear ], 0, sizeof( INVENTORY_IN_SLOT ) );
+	PlayersOfferArea[ ubSlotToClear ] = INVENTORY_IN_SLOT{};
 
 	//Clear the text for the item
 	gPlayersOfferSlotsMouseRegions[ubSlotToClear].SetFastHelpText(L"");
@@ -4695,7 +4704,7 @@ static void EvaluateItemAddedToPlayersOfferArea(INT8 bSlotID, BOOLEAN fFirstOne)
 				}
 				else
 				{
-					SLOGW(DEBUG_TAG_INTERFACE, "Failed to add repair item to ArmsDealerOfferArea.");
+					SLOGW("Failed to add repair item to ArmsDealerOfferArea.");
 					return;
 				}
 			}
@@ -4795,7 +4804,7 @@ static void EvaluateItemAddedToPlayersOfferArea(INT8 bSlotID, BOOLEAN fFirstOne)
 				break;
 
 			default:
-				SLOGW(DEBUG_TAG_INTERFACE, "Invalid evaluation result of %d.", uiEvalResult );
+				SLOGW("Invalid evaluation result of %d.", uiEvalResult );
 				break;
 		}
 
@@ -5083,7 +5092,7 @@ static void InitShopKeeperItemDescBox(OBJECTTYPE* pObject, UINT8 ubPocket, UINT8
 		break;
 
 		default:
-			SLOGE(DEBUG_TAG_ASSERTS, "InitShopKeeperItemDescBox: invalid FromLocation");
+			SLOGA("InitShopKeeperItemDescBox: invalid FromLocation");
 			return;
 	}
 
@@ -5303,7 +5312,7 @@ static void SplitComplexObjectIntoSubObjects(OBJECTTYPE* pComplexObject)
 
 
 	// clear subobject array
-	memset (gSubObject, 0, sizeof( OBJECTTYPE ) * MAX_SUBOBJECTS_PER_OBJECT );
+	std::fill_n(gSubObject, MAX_SUBOBJECTS_PER_OBJECT, OBJECTTYPE{});
 
 
 	// if it isn't stacked
@@ -5467,7 +5476,7 @@ static BOOLEAN AddObjectForEvaluation(OBJECTTYPE* pObject, UINT8 ubOwnerProfileI
 	INT8 bAddedToSlotID;
 
 	// Make a new inv slot out of the subobject
-	memset( &InvSlot, 0, sizeof( INVENTORY_IN_SLOT ) );
+	InvSlot = INVENTORY_IN_SLOT{};
 	InvSlot.ItemObject = *pObject;
 
 	InvSlot.sItemIndex = pObject->usItem;
@@ -5882,7 +5891,7 @@ static void GivePlayerSomeChange(UINT32 uiAmount)
 {
 	INVENTORY_IN_SLOT MoneyInvSlot;
 
-	memset( &MoneyInvSlot, 0, sizeof ( MoneyInvSlot ) );
+	MoneyInvSlot = INVENTORY_IN_SLOT{};
 
 	CreateMoney( uiAmount, &MoneyInvSlot.ItemObject );
 	MoneyInvSlot.sItemIndex = MoneyInvSlot.ItemObject.usItem;

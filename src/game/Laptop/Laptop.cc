@@ -88,6 +88,9 @@
 #include "JAScreens.h"
 #include "UILayout.h"
 
+#include <algorithm>
+#include <iterator>
+
 // laptop programs
 enum
 {
@@ -353,7 +356,7 @@ static void InitBookMarkList(void);
 void LaptopScreenInit(void)
 {
 	//Memset the whole structure, to make sure of no 'JUNK'
-	memset(&LaptopSaveInfo, 0, sizeof(LaptopSaveInfoStruct));
+	LaptopSaveInfo = LaptopSaveInfoStruct{};
 
 	LaptopSaveInfo.gfNewGameLaptop = TRUE;
 
@@ -381,7 +384,7 @@ void LaptopScreenInit(void)
 	GameInitPersonnel();
 
 	// init program states
-	memset(&gLaptopProgramStates, LAPTOP_PROGRAM_MINIMIZED, sizeof(gLaptopProgramStates));
+	std::fill(std::begin(gLaptopProgramStates), std::end(gLaptopProgramStates), LAPTOP_PROGRAM_MINIMIZED);
 
 	gfAtLeastOneMercWasHired = FALSE;
 
@@ -505,10 +508,10 @@ static void EnterLaptop(void)
 	fFirstTimeInLaptop = TRUE;
 
 	// reset all bookmark visits
-	memset(&LaptopSaveInfo.fVisitedBookmarkAlready, 0, sizeof(LaptopSaveInfo.fVisitedBookmarkAlready));
+	std::fill(std::begin(LaptopSaveInfo.fVisitedBookmarkAlready), std::end(LaptopSaveInfo.fVisitedBookmarkAlready), 0);
 
 	// init program states
-	memset(&gLaptopProgramStates, LAPTOP_PROGRAM_MINIMIZED, sizeof(gLaptopProgramStates));
+	std::fill(std::begin(gLaptopProgramStates), std::end(gLaptopProgramStates), LAPTOP_PROGRAM_MINIMIZED);
 
 	// turn the power on
 	fPowerLightOn = TRUE;
@@ -1370,7 +1373,7 @@ static void LeaveLapTopScreen(void)
 		if (gfAtLeastOneMercWasHired)
 		{
 			if (LaptopSaveInfo.gfNewGameLaptop)
-	{
+			{
 				LaptopSaveInfo.gfNewGameLaptop = FALSE;
 				fExitingLaptopFlag = TRUE;
 				InitNewGame();
@@ -1401,7 +1404,7 @@ static void LeaveLapTopScreen(void)
 
 			//Step 2:  The mapscreen image is in the EXTRABUFFER, and laptop is in the SAVEBUFFER
 			//         Start transitioning the screen.
-			SGPBox const DstRect = { STD_SCREEN_X, STD_SCREEN_Y, MAP_SCREEN_WIDTH, MAP_SCREEN_HEIGHT };
+			SGPBox const SrcRect = { STD_SCREEN_X, STD_SCREEN_Y, MAP_SCREEN_WIDTH, MAP_SCREEN_HEIGHT };
 			const UINT32 uiTimeRange = 1000;
 			INT32 iPercentage     = 100;
 			INT32 iRealPercentage = 100;
@@ -1430,13 +1433,7 @@ static void LeaveLapTopScreen(void)
 					iPercentage += (100-iPercentage) * iFactor * 0.01 + 0.5;
 				}
 
-				//Mapscreen source rect
-				SGPRect SrcRect1;
-				SrcRect1.iLeft   =                 464 * iPercentage / 100;
-				SrcRect1.iRight  = SCREEN_WIDTH  - 163 * iPercentage / 100;
-				SrcRect1.iTop    =                 417 * iPercentage / 100;
-				SrcRect1.iBottom = SCREEN_HEIGHT -  55 * iPercentage / 100;
-				//Laptop source rect
+				//Scaled laptop
 				INT32 iScalePercentage;
 				if (iPercentage < 99)
 				{
@@ -1451,9 +1448,9 @@ static void LeaveLapTopScreen(void)
 				const UINT16 uX = 472 - (472 - 320) * iScalePercentage / 5333;
 				const UINT16 uY = 424 - (424 - 240) * iScalePercentage / 5333;
 
-				SGPBox const SrcRect2 = { (UINT16)(STD_SCREEN_X + uX - uWidth / 2), (UINT16)(STD_SCREEN_Y + uY - uHeight / 2), uWidth, uHeight };
+				SGPBox const DstRect = { (UINT16)(STD_SCREEN_X + uX - uWidth / 2), (UINT16)(STD_SCREEN_Y + uY - uHeight / 2), uWidth, uHeight };
 
-				BltStretchVideoSurface(FRAME_BUFFER, guiSAVEBUFFER, &DstRect, &SrcRect2);
+				BltStretchVideoSurface(FRAME_BUFFER, guiSAVEBUFFER, &SrcRect, &DstRect);
 				InvalidateScreen();
 				RefreshScreen();
 			}
@@ -1626,7 +1623,7 @@ static void FilesRegionButtonCallback(GUI_BUTTON *btn, INT32 reason)
 static void InitBookMarkList(void)
 {
 	// sets bookmark list to -1
-	memset(LaptopSaveInfo.iBookMarkList, -1, sizeof(LaptopSaveInfo.iBookMarkList));
+	std::fill(std::begin(LaptopSaveInfo.iBookMarkList), std::end(LaptopSaveInfo.iBookMarkList), -1);
 }
 
 
@@ -3522,7 +3519,7 @@ void CreateFileAndNewEmailIconFastHelpText(UINT32 uiHelpTextID, BOOLEAN fClearHe
 		case LAPTOP_BN_HLP_TXT_YOU_HAVE_NEW_FILE: pRegion = &gNewFileIconRegion; break;
 
 		default:
-			SLOGE(DEBUG_TAG_ASSERTS, "CreateFileAndNewEmailIconFastHelpText: invalid HelpTextID");
+			SLOGA("CreateFileAndNewEmailIconFastHelpText: invalid HelpTextID");
 			return;
 	}
 
@@ -3536,9 +3533,9 @@ void CreateFileAndNewEmailIconFastHelpText(UINT32 uiHelpTextID, BOOLEAN fClearHe
 
 TEST(Laptop, asserts)
 {
-	EXPECT_EQ(sizeof(LIFE_INSURANCE_PAYOUT), 8);
-	EXPECT_EQ(sizeof(BobbyRayPurchaseStruct), 8);
-	EXPECT_EQ(sizeof(BobbyRayOrderStruct), 84);
+	EXPECT_EQ(sizeof(LIFE_INSURANCE_PAYOUT), 8u);
+	EXPECT_EQ(sizeof(BobbyRayPurchaseStruct), 8u);
+	EXPECT_EQ(sizeof(BobbyRayOrderStruct), 84u);
 }
 
 #endif

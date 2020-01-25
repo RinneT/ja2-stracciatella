@@ -15,6 +15,8 @@
 #include "ContentManager.h"
 #include "GameInstance.h"
 
+#include <algorithm>
+
 #define AIM_ALUMNI_NAME_FILE		BINARYDATADIR "/alumname.edt"
 #define AIM_ALUMNI_FILE			BINARYDATADIR "/alumni.edt"
 
@@ -124,7 +126,7 @@ void EnterInitAimArchives()
 	gfDrawPopUpBox=FALSE;
 	gfDestroyPopUpBox = FALSE;
 
-	memset( &AimArchivesSubPagesVisitedFlag, 0, 3);
+	std::fill_n(AimArchivesSubPagesVisitedFlag, 3, 0);
 	AimArchivesSubPagesVisitedFlag[0] = TRUE;
 }
 
@@ -384,10 +386,10 @@ static void InitAlumniFaceRegions(void)
 	INT32       face_idx = start;
 	UINT16 const w        = AIM_ALUMNI_ALUMNI_FACE_WIDTH;
 	UINT16 const h        = AIM_ALUMNI_ALUMNI_FACE_HEIGHT;
-	for (size_t i = 0; i != n_faces; ++i, ++face_idx)
+	for (INT32 i = 0; i != n_faces; ++i, ++face_idx)
 	{
-		UINT16        const x = i % AIM_ALUMNI_NUM_FACE_COLS * AIM_ALUMNI_GRID_OFFSET_X + AIM_ALUMNI_START_GRID_X;
-		UINT16        const y = i / AIM_ALUMNI_NUM_FACE_COLS * AIM_ALUMNI_GRID_OFFSET_Y + AIM_ALUMNI_START_GRID_Y;
+		UINT16        const x = static_cast<UINT16>(i % AIM_ALUMNI_NUM_FACE_COLS * AIM_ALUMNI_GRID_OFFSET_X + AIM_ALUMNI_START_GRID_X);
+		UINT16        const y = static_cast<UINT16>(i / AIM_ALUMNI_NUM_FACE_COLS * AIM_ALUMNI_GRID_OFFSET_Y + AIM_ALUMNI_START_GRID_Y);
 		MOUSE_REGION* const r = &gMercAlumniFaceMouseRegions[i];
 		MSYS_DefineRegion(r, x, y, x + w, y + h, MSYS_PRIORITY_HIGH, CURSOR_WWW, MSYS_NO_CALLBACK, SelectAlumniFaceRegionCallBack);
 		MSYS_SetRegionUserData(r, 0, face_idx);

@@ -32,6 +32,9 @@
 #include "Video.h"
 #endif
 
+#include <algorithm>
+#include <iterator>
+
 /* view directions */
 #define DLEFT           0
 #define DRIGHT          1
@@ -260,7 +263,6 @@ void RevealRoofsAndItems(SOLDIERTYPE* const pSoldier, const BOOLEAN fShowLocator
 	UINT8   dir,range,Path2;
 	UINT8   ubRoomNo;
 	UINT8   ubMovementCost;
-	BOOLEAN fCheckForRooms = FALSE;
 	BOOLEAN fTravelCostObs;
 	BOOLEAN fGoneThroughDoor = FALSE;
 	BOOLEAN fThroughWindow = FALSE;
@@ -298,7 +300,7 @@ void RevealRoofsAndItems(SOLDIERTYPE* const pSoldier, const BOOLEAN fShowLocator
 	if ( gubGridNoValue == 255 )
 	{
 		//Reset!
-		memset( gubGridNoMarkers, 0, sizeof( gubGridNoMarkers ) );
+		std::fill(std::begin(gubGridNoMarkers), std::end(gubGridNoMarkers), 0);
 		gubGridNoValue = 1;
 	}
 
@@ -351,7 +353,7 @@ void RevealRoofsAndItems(SOLDIERTYPE* const pSoldier, const BOOLEAN fShowLocator
 #ifdef _DEBUG
 		if (_KeyDown(SDLK_NUMLOCKCLEAR))
 		{
-			memset( gubFOVDebugInfoInfo, 0, sizeof( gubFOVDebugInfoInfo ) );
+			std::fill(std::begin(gubFOVDebugInfoInfo), std::end(gubFOVDebugInfoInfo), 0);
 			SetRenderFlags( RENDER_FLAG_FULL );
 			RenderWorld( );
 		}
@@ -364,7 +366,6 @@ void RevealRoofsAndItems(SOLDIERTYPE* const pSoldier, const BOOLEAN fShowLocator
 			prevmarker = marker;
 
 			nextDir = 99;
-			fCheckForRooms = FALSE;
 			fTravelCostObs = FALSE;
 			if ( fStopRevealingItemsAfterThisTile )
 			{
@@ -389,7 +390,7 @@ void RevealRoofsAndItems(SOLDIERTYPE* const pSoldier, const BOOLEAN fShowLocator
 			{
 				// ATE: Make sure we are going through the same direction!
 				// THis is to solve the drassen SAM problem with seeing through walls
-				if ( Dir[markerDir] == bThroughWindowDirection)
+				if ( static_cast<INT8>(Dir[markerDir]) == bThroughWindowDirection)
 				{
 					fThroughWindow = 2;
 				}
@@ -675,17 +676,6 @@ void RevealRoofsAndItems(SOLDIERTYPE* const pSoldier, const BOOLEAN fShowLocator
 						break;
 					}
 
-					//if ( Blocking == NOTHING_BLOCKING || Blocking == BLOCKING_NEXT_TILE )
-					if ( Blocking == NOTHING_BLOCKING )
-					{
-						fCheckForRooms = TRUE;
-					}
-
-					if ( ubLevel != 0 )
-					{
-						fCheckForRooms = FALSE;
-					}
-
 					// CHECK FOR SLANT ROOF!
 					{
 						STRUCTURE* pStructure;
@@ -721,7 +711,6 @@ void RevealRoofsAndItems(SOLDIERTYPE* const pSoldier, const BOOLEAN fShowLocator
 						}
 
 						// CHECK FOR ROOMS
-						//if ( fCheckForRooms )
 						{
 							if ( InAHiddenRoom( (INT16)marker, &ubRoomNo ) )
 							{

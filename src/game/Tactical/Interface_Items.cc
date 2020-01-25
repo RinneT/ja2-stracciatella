@@ -80,7 +80,10 @@
 #include "Soldier.h"
 #include "WeaponModels.h"
 #include "policy/GamePolicy.h"
-#include "slog/slog.h"
+#include "Logger.h"
+
+#include <algorithm>
+#include <iterator>
 
 #define ITEMDESC_FONT					BLOCKFONT2
 #define ITEMDESC_FONTSHADOW2				32
@@ -693,7 +696,7 @@ void InitInvSlotInterface(INV_REGION_DESC const* const pRegionDesc, INV_REGION_D
 		MSYS_SetRegionUserData(&m, 0, i);
 	}
 
-	memset(gbCompatibleAmmo, 0, sizeof(gbCompatibleAmmo));
+	std::fill(std::begin(gbCompatibleAmmo), std::end(gbCompatibleAmmo), 0);
 }
 
 
@@ -1235,7 +1238,7 @@ BOOLEAN InternalHandleCompatibleAmmoUI(const SOLDIERTYPE* pSoldier, const OBJECT
 {
 	BOOLEAN fFound = FALSE;
 	INT32 cnt;
-	BOOLEAN fFoundAttachment = FALSE;
+	//BOOLEAN fFoundAttachment = FALSE;
 
 	// ATE: If pTest object is NULL, test only for existence of syringes, etc...
 	if ( pTestObject == NULL )
@@ -1301,7 +1304,7 @@ BOOLEAN InternalHandleCompatibleAmmoUI(const SOLDIERTYPE* pSoldier, const OBJECT
 			ValidLaunchable(b, a) ||
 			ValidLaunchable(a, b) )
 		{
-			fFoundAttachment = TRUE;
+			//fFoundAttachment = TRUE;
 
 			if ( fOn != gbCompatibleAmmo[ cnt ] )
 			{
@@ -1904,7 +1907,7 @@ void InternalInitItemDescriptionBox(OBJECTTYPE* const o, const INT16 sX, const I
 	}
 	else
 	{
-		memset(&gRemoveMoney, 0, sizeof(REMOVE_MONEY));
+		gRemoveMoney = REMOVE_MONEY{};
 		gRemoveMoney.uiTotalAmount    = o->uiMoneyAmount;
 		gRemoveMoney.uiMoneyRemaining = o->uiMoneyAmount;
 		gRemoveMoney.uiMoneyRemoving  = 0;
@@ -2054,7 +2057,7 @@ static void DoAttachment(void)
 				if (guiCurrentScreen == SHOPKEEPER_SCREEN)
 				{
 					//Clear out the moving cursor
-					memset( &gMoveingItem, 0, sizeof( INVENTORY_IN_SLOT ) );
+					gMoveingItem = INVENTORY_IN_SLOT{};
 
 					//change the curosr back to the normal one
 					SetSkiCursor( CURSOR_NORMAL );
@@ -2361,7 +2364,8 @@ void RenderItemDescriptionBox(void)
 			size_t            n = 0;
 			if (w->calibre->index != NOAMMO)
 			{
-				n += swprintf(pStr, lengthof(pStr), L"%ls ", w->calibre->getName());
+				ST::wchar_buffer name = w->calibre->getName()->to_wchar();
+				n += swprintf(pStr, lengthof(pStr), L"%ls ", name.c_str());
 			}
 			n += swprintf(pStr + n, lengthof(pStr) - n, L"%ls", WeaponType[w->ubWeaponType]);
 			if (wchar_t const* const imprint = GetObjectImprint(obj))
@@ -2789,7 +2793,7 @@ void DeleteItemDescriptionBox( )
 		if( gRemoveMoney.uiMoneyRemaining == 0 && !gfAddingMoneyToMercFromPlayersAccount )
 		{
 			//get rid of the money in the slot
-			memset( gpItemDescObject, 0, sizeof( OBJECTTYPE ) );
+			*gpItemDescObject = OBJECTTYPE{};
 			gpItemDescObject = NULL;
 		}
 	}
@@ -2835,7 +2839,7 @@ void BeginItemPointer( SOLDIERTYPE *pSoldier, UINT8 ubHandPos )
 	BOOLEAN fOk;
 	OBJECTTYPE pObject;
 
-	memset( &pObject, 0, sizeof( OBJECTTYPE ) );
+	pObject = OBJECTTYPE{};
 
 	if (_KeyDown( SHIFT ))
 	{
@@ -2908,7 +2912,7 @@ void EndItemPointer( )
 
 		if (guiCurrentScreen == SHOPKEEPER_SCREEN)
 		{
-			memset( &gMoveingItem, 0, sizeof( INVENTORY_IN_SLOT ) );
+			gMoveingItem = INVENTORY_IN_SLOT{};
 			SetSkiCursor( CURSOR_NORMAL );
 		}
 		else
@@ -3264,7 +3268,8 @@ static bool IsValidAmmoToReloadRobot(SOLDIERTYPE const& s, OBJECTTYPE const& amm
 	OBJECTTYPE const& weapon = s.inv[HANDPOS];
 	if (!CompatibleAmmoForGun(&ammo, &weapon))
 	{
-		ScreenMsg(FONT_MCOLOR_LTYELLOW, MSG_UI_FEEDBACK, TacticalStr[ROBOT_NEEDS_GIVEN_CALIBER_STR], GCM->getWeapon(weapon.usItem)->calibre->getName());
+		ST::wchar_buffer name = GCM->getWeapon(weapon.usItem)->calibre->getName()->to_wchar();
+		ScreenMsg(FONT_MCOLOR_LTYELLOW, MSG_UI_FEEDBACK, TacticalStr[ROBOT_NEEDS_GIVEN_CALIBER_STR], name.c_str());
 		return false;
 	}
 	return true;
@@ -3705,7 +3710,7 @@ BOOLEAN HandleItemPointerClick( UINT16 usMapPos )
 
 			// Increment attacker count...
 			gTacticalStatus.ubAttackBusyCount++;
-			SLOGD(DEBUG_TAG_INTERFACE, "INcremtning ABC: Throw item to %d", gTacticalStatus.ubAttackBusyCount);
+			SLOGD("INcremtning ABC: Throw item to %d", gTacticalStatus.ubAttackBusyCount);
 
 			// Given our gridno, throw grenate!
 			CalculateLaunchItemParamsForThrow(gpItemPointerSoldier, sGridNo, gpItemPointerSoldier->bLevel, gsInterfaceLevel * 256 + sEndZ, gpItemPointer, 0, ubThrowActionCode, target);
@@ -4047,7 +4052,7 @@ void RenderKeyRingPopup(const BOOLEAN fFullRender)
 	}
 
 	OBJECTTYPE o;
-	memset(&o, 0, sizeof(o));
+	o = OBJECTTYPE{};
 	o.bStatus[0] = 100;
 
 	ETRLEObject const& pTrav = guiItemPopupBoxes->SubregionProperties(0);
@@ -4274,7 +4279,7 @@ static void ItemPopupRegionCallback(MOUSE_REGION* pRegion, INT32 iReason)
 
 					if (guiCurrentScreen == SHOPKEEPER_SCREEN)
 					{
-						memset( &gMoveingItem, 0, sizeof( INVENTORY_IN_SLOT ) );
+						gMoveingItem = INVENTORY_IN_SLOT{};
 						SetSkiCursor( CURSOR_NORMAL );
 					}
 				}
@@ -4484,7 +4489,7 @@ void InitializeItemPickupMenu(SOLDIERTYPE* const pSoldier, INT16 const sGridNo, 
 	LocateSoldier(pSoldier, FALSE);
 
 	ITEM_PICKUP_MENU_STRUCT& menu = gItemPickupMenu;
-	memset(&menu, 0, sizeof(menu));
+	menu = ITEM_PICKUP_MENU_STRUCT{};
 	menu.pItemPool = pItemPool;
 
 	InterruptTime();
@@ -5099,7 +5104,7 @@ static void BtnMoneyButtonCallback(GUI_BUTTON* const btn, INT32 const reason)
 
 	if (reason & MSYS_CALLBACK_REASON_LBUTTON_UP)
 	{
-		INT32       amount   = 0;
+		UINT32      amount   = 0;
 		UINT8 const ubButton = btn->GetUserData();
 		switch (ubButton)
 		{
@@ -5138,7 +5143,7 @@ static void BtnMoneyButtonCallback(GUI_BUTTON* const btn, INT32 const reason)
 	{
 		btn->uiFlags &= ~BUTTON_CLICKED_ON;
 
-		INT32       amount   = 0;
+		UINT32      amount   = 0;
 		UINT8 const ubButton = btn->GetUserData();
 		switch (ubButton)
 		{
@@ -5171,7 +5176,7 @@ static void RemoveMoney(void)
 		{
 			INVENTORY_IN_SLOT InvSlot;
 
-			memset( &InvSlot, 0, sizeof(INVENTORY_IN_SLOT) );
+			InvSlot = INVENTORY_IN_SLOT{};
 
 			InvSlot.fActive = TRUE;
 			InvSlot.sItemIndex = MONEY;
@@ -5264,7 +5269,8 @@ void GetHelpTextForItem(wchar_t* const dst, size_t const length, OBJECTTYPE cons
 			const CalibreModel * calibre = GCM->getWeapon(usItem)->calibre;
 			if (calibre->showInHelpText)
 			{
-				n += swprintf(dst + n, length - n, L" (%ls)", calibre->getName());
+				ST::wchar_buffer name = calibre->getName()->to_wchar();
+				n += swprintf(dst + n, length - n, L" (%ls)", name.c_str());
 			}
 		}
 

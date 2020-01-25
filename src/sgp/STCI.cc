@@ -10,7 +10,7 @@
 
 #include "ContentManager.h"
 #include "GameInstance.h"
-#include "slog/slog.h"
+#include "Logger.h"
 
 static SGPImage* STCILoadIndexed(UINT16 contents, HWFILE, STCIHeader const*);
 static SGPImage* STCILoadRGB(    UINT16 contents, HWFILE, STCIHeader const*);
@@ -65,7 +65,7 @@ static SGPImage* STCILoadRGB(UINT16 const contents, HWFILE const f, STCIHeader c
 					gusBlueMask  != (UINT16)header->RGB.uiBlueMask)
 			{
 				// colour distribution of the file is different from hardware!  We have to change it!
-				SLOGD(DEBUG_TAG_STCI, "Converting to current RGB distribution!");
+				SLOGD("Converting to current RGB distribution!");
 				// Convert the image to the current hardware's specifications
 				UINT32  const size = header->usWidth * header->usHeight;
 				UINT16* const data = (UINT16*)(UINT8*)img->pImageData;
@@ -174,9 +174,9 @@ static SGPImage* STCILoadIndexed(UINT16 const contents, HWFILE const f, STCIHead
 
 TEST(STCI, asserts)
 {
-	EXPECT_EQ(sizeof(STCIHeader), 64);
-	EXPECT_EQ(sizeof(STCISubImage), 16);
-	EXPECT_EQ(sizeof(STCIPaletteElement), 3);
+	EXPECT_EQ(sizeof(STCIHeader), 64u);
+	EXPECT_EQ(sizeof(STCISubImage), 16u);
+	EXPECT_EQ(sizeof(STCIPaletteElement), 3u);
 }
 
 #endif

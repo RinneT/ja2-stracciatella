@@ -10,7 +10,7 @@
 #include "ContentMusic.h"
 #include "Debug.h"
 #include "ScreenIDs.h"
-#include "slog/slog.h"
+#include "Logger.h"
 
 #include "ContentManager.h"
 #include "GameInstance.h"
@@ -37,20 +37,19 @@ static BOOLEAN gfDontRestartSong   = FALSE;
 
 
 static BOOLEAN MusicFadeIn(void);
-static BOOLEAN MusicStop(void);
+static void MusicStop(void);
 static void MusicStopCallback(void* pData);
 
 
-void MusicPlay(const UTF8String* pFilename)
+void MusicPlay(const ST::string* pFilename)
 {
-	if(fMusicPlaying)
-		MusicStop();
+	MusicStop();
 
-	uiMusicHandle = SoundPlayStreamedFile(pFilename->getUTF8(), 0, 64, 1, MusicStopCallback, NULL);
+	uiMusicHandle = SoundPlayStreamedFile(pFilename->c_str(), 0, 64, 1, MusicStopCallback, NULL);
 
 	if(uiMusicHandle!=SOUND_ERROR)
 	{
-		SLOGD(DEBUG_TAG_MUSICCTL, "Music Play %d %d", uiMusicHandle, gubMusicMode);
+		SLOGD("Music Play %d %d", uiMusicHandle, gubMusicMode);
 
 		gfMusicEnded	= FALSE;
 		fMusicPlaying	= TRUE;
@@ -58,7 +57,7 @@ void MusicPlay(const UTF8String* pFilename)
 		return;
 	}
 
-	SLOGE(DEBUG_TAG_MUSICCTL, "Music Play Error %d %d", uiMusicHandle, gubMusicMode);
+	SLOGE("Music Play Error %d %d", uiMusicHandle, gubMusicMode);
 }
 
 
@@ -111,21 +110,24 @@ UINT32 MusicGetVolume(void)
 
 
 //		Stops the currently playing music.
-//
-//	Returns:	TRUE if the music was stopped, FALSE if an error occurred
-static BOOLEAN MusicStop(void)
+static void MusicStop(void)
 {
+	SLOGD("Music Stop %d %d %d", fMusicPlaying, uiMusicHandle, gubMusicMode);
+	if(!fMusicPlaying)
+	{
+		return;
+	}
+
 	if(uiMusicHandle!=NO_SAMPLE)
 	{
-		SLOGD(DEBUG_TAG_MUSICCTL, "Music Stop %d %d", uiMusicHandle, gubMusicMode);
-
 		SoundStop(uiMusicHandle);
-		fMusicPlaying	= FALSE;
 		uiMusicHandle = NO_SAMPLE;
-		return(TRUE);
 	}
-	SLOGE(DEBUG_TAG_MUSICCTL,  "Music Stop %d %d", uiMusicHandle, gubMusicMode);
-	return(FALSE);
+	else if(!gfMusicEnded)
+	{
+		SLOGW("expected either music data or the end of the music (mode=%d, handle=%d, ended=%d)", gubMusicMode, uiMusicHandle, gfMusicEnded);
+	}
+	fMusicPlaying = FALSE;
 }
 
 
@@ -207,7 +209,7 @@ void MusicPoll(void)
 		if ( gfMusicEnded )
 		{
 			// OK, based on our music mode, play another!
-			SLOGD(DEBUG_TAG_MUSICCTL, "Music End Loop %d %d", uiMusicHandle, gubMusicMode);
+			SLOGD("Music End Loop %d %d", uiMusicHandle, gubMusicMode);
 
 			// If we were in victory mode, change!
 			if ( gbVictorySongCount == 1 || gbDeathSongCount == 1 )
@@ -264,7 +266,7 @@ void SetMusicMode(MusicMode ubMusicMode)
 		// Set mode....
 		gubMusicMode = ubMusicMode;
 
-		SLOGD(DEBUG_TAG_MUSICCTL, "Music New Mode %d %d", uiMusicHandle, gubMusicMode);
+		SLOGD("Music New Mode %d %d", uiMusicHandle, gubMusicMode);
 
 		gbVictorySongCount = 0;
 		gbDeathSongCount = 0;
@@ -287,7 +289,7 @@ void SetMusicMode(MusicMode ubMusicMode)
 
 static void StartMusicBasedOnMode(void)
 {
-	SLOGD(DEBUG_TAG_MUSICCTL, "StartMusicBasedOnMode() %d %d", uiMusicHandle, gubMusicMode);
+	SLOGD("StartMusicBasedOnMode() %d %d", uiMusicHandle, gubMusicMode);
 	MusicMode next = gubMusicMode;
 
 	switch (gubMusicMode) {
@@ -348,7 +350,7 @@ static void StartMusicBasedOnMode(void)
 
 static void MusicStopCallback(void* pData)
 {
-	SLOGD(DEBUG_TAG_MUSICCTL, "Music EndCallback %d %d", uiMusicHandle, gubMusicMode);
+	SLOGD("Music EndCallback %d %d", uiMusicHandle, gubMusicMode);
 
 	gfMusicEnded  = TRUE;
 	uiMusicHandle = NO_SAMPLE;

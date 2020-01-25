@@ -1,3 +1,5 @@
+# validator: https://ci.appveyor.com/tools/validate-yaml
+
 version: "{build}"
 
 environment:
@@ -5,7 +7,11 @@ environment:
     secure: "uBUgFeI9sHRv0IiMPpA9rg=="
   SFTP_PASSWORD:
     secure: "gXqhlT/yjiLd/jTpvg4kcZtBRCZ8RnoOJ3zRTSF5voA="
+  GITHUB_ACCESS_TOKEN:
+    secure: "fcDy5AgkBH9bKqdsbwv9piWbN6ksoUKk+iky/DQmk3YG3UNl68BegfkYUzSF3rJ7"
   matrix:
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+      CI_TARGET: msys2-mingw32
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
       CMAKE_GENERATOR_NAME: Visual Studio 14 2015
       RUST_TARGET: i686-pc-windows-msvc
@@ -16,12 +22,38 @@ environment:
 branches:
   only:
     - master
+    - nightly
 
 matrix:
   fast_finish: true
 
 clone_folder: c:\projects\ja2-stracciatella
 clone_depth: 1
+
+for:
+  -
+    matrix:
+      only:
+        - CI_TARGET: msys2-mingw32
+
+    init:
+      - cmd: rem init override
+    install:
+      - cmd: rem install override
+    before_build:
+      - cmd: rem before_build override
+    build_script:
+      - cmd: |
+          rem update msys2 runtime
+          rem FIXME upgrades disabled until there is a fix for https://github.com/msys2/MSYS2-packages/issues/1141
+          rem C:\msys64\msys2_shell.cmd -defterm -no-start -c "pacman -Syu --noconfirm --needed"
+      - cmd: |
+          rem build, package, test, publish in msys2
+          C:\msys64\msys2_shell.cmd -defterm -no-start -mingw32 -here -c "bash .github/scripts/ci-build.sh"
+    test_script:
+      - cmd: rem test_script override
+    after_test:
+      - cmd: rem after_test override
 
 init:
   - ps: $env:PUBLISH_BINARY = "false";
@@ -35,11 +67,11 @@ init:
         }
         true;
   - ps: >
-        if (Test-Path Env:\NIGHTLY_VERSION) {
+        if ("$env:APPVEYOR_REPO_BRANCH" -eq "nightly") {
           $env:BUILD_TYPE = "Release";
           $env:PUBLISH_BINARY = "true";
           $env:PUBLISH_DIR = "nightlies";
-          $env:VERSION_TAG = "${env:NIGHTLY_VERSION}";
+          $env:VERSION_TAG = "$(Get-Date -UFormat "%Y%m%d")";
         }
         true;
   - ps: >
@@ -52,6 +84,11 @@ init:
         true;
 
   - ps: $env:BUILD_SWITCHES = "-DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DVERSION_TAG=%VERSION_TAG% -DCPACK_GENERATOR=ZIP;NSIS -DCMAKE_TOOLCHAIN_FILE=./cmake/toolchain-msvc.cmake"
+  - ps: >
+        if ("$env:BUILD_TYPE" -eq "Release") {
+          $env:BUILD_SWITCHES = "${env:BUILD_SWITCHES} -DWITH_EDITOR_SLF=ON";
+        }
+        true;
 
   - cmd: echo "%CMAKE_GENERATOR_NAME%"
 
@@ -66,10 +103,14 @@ install:
   - cmd: curl -sSf -o rustup-init.exe https://win.rustup.rs/
   - cmd: rustup-init.exe -y --default-toolchain %RUSTUP_TOOLCHAIN%
   - cmd: set PATH=%PATH%;C:\Users\appveyor\.cargo\bin
+  - cmd: rustup.exe component add rustfmt
+  - cmd: rustup.exe component add clippy
 
   - cmd: echo "%RUSTUP_TOOLCHAIN%"
   - cmd: rustc -V
   - cmd: cargo -V
+  - cmd: cargo fmt -- -V
+  - cmd: cargo clippy -- -V
   - cmd: cmake --version
 
 before_build:
@@ -81,9 +122,9 @@ build_script:
   - ps: cmake --build c:\projects\ja2-stracciatella\ci-build --target ALL_BUILD --config ${env:BUILD_TYPE}
 
 test_script:
-  - cmd: cd ..\rust
-  - cmd: cargo test
-  - cmd: cd ..\ci-build
+  - cmd: cmake --build . --target cargo-fmt-test
+  - cmd: cmake --build . --target cargo-clippy-test
+  - cmd: cmake --build . --target cargo-test
   - cmd: cd %BUILD_TYPE%
   - cmd: ja2.exe -unittests
   - cmd: ja2-launcher.exe -help
@@ -94,7 +135,7 @@ after_test:
           if ("$env:PUBLISH_BINARY" -eq "true" -and (Test-Path Env:\SFTP_PASSWORD)) {
             $binary_paths = Get-ChildItem c:\projects\ja2-stracciatella\ci-build\ja2-stracciatella_*;
             foreach ($file in $binary_paths) {
-              iex "curl.exe --ftp-create-dirs -T ${file} --ftp-ssl -u ${env:SFTP_USER}:${env:SFTP_PASSWORD} ftp://www61.your-server.de/${env:PUBLISH_DIR}/"
+              iex "curl.exe --retry 3 --ftp-create-dirs -T ${file} --ftp-ssl -u ${env:SFTP_USER}:${env:SFTP_PASSWORD} ftp://www61.your-server.de/${env:PUBLISH_DIR}/"
             }
           }
 

@@ -233,7 +233,7 @@ void AddCave( INT32 iMapIndex, UINT16 usIndex )
 {
 	LEVELNODE *pStruct;
 
-	if( iMapIndex < 0 || iMapIndex >= NOWHERE )
+	if( iMapIndex < 0 || iMapIndex >= GRIDSIZE )
 		return;
 	//First toast any existing wall (caves)
 	RemoveAllStructsOfTypeRange( iMapIndex, FIRSTWALL, LASTWALL );
@@ -378,7 +378,7 @@ UINT16 PickAWallPiece( UINT16 usWallPieceType )
 	if (usWallPieceType < NUM_WALL_TYPES)
 	{
 		usVariants = gbWallTileLUT[ usWallPieceType ][ 0 ];
-		usVariantChosen = ( rand() % usVariants ) + 1;
+		usVariantChosen = Random(usVariants) + 1;
 		usWallPieceChosen = gbWallTileLUT[ usWallPieceType ][ usVariantChosen ];
 	}
 	return usWallPieceChosen;
@@ -591,7 +591,7 @@ void RebuildRoofUsingFloorInfo(INT32 const map_idx, UINT16 roof_type)
 		bottom          ? BOTTOM_ROOF_INDEX      :
 		left            ? LEFT_ROOF_INDEX        :
 		right           ? RIGHT_ROOF_INDEX       :
-		CENTER_ROOF_BASE_INDEX + rand() % CENTER_ROOF_VARIANTS;
+		CENTER_ROOF_BASE_INDEX + Random(CENTER_ROOF_VARIANTS);
 	UINT16 const tile_idx = GetTileIndexFromTypeSubIndex(roof_type, roof_idx);
 	AddRoofToHead(map_idx, tile_idx);
 	// If the editor view roofs is off, then the new roofs need to be hidden.
@@ -628,7 +628,7 @@ void RebuildRoof(UINT32 const map_idx, UINT16 roof_type)
 		bottom           ? BOTTOM_ROOF_INDEX      :
 		left             ? LEFT_ROOF_INDEX        :
 		right            ? RIGHT_ROOF_INDEX       :
-		CENTER_ROOF_BASE_INDEX + rand() % CENTER_ROOF_VARIANTS;
+		CENTER_ROOF_BASE_INDEX + Random(CENTER_ROOF_VARIANTS);
 	UINT16 const tile_idx = GetTileIndexFromTypeSubIndex(roof_type, roof_idx);
 	AddRoofToHead(map_idx, tile_idx);
 	// If the editor view roofs is off, then the new roofs need to be hidden.
@@ -794,7 +794,7 @@ void AddCaveSectionToWorld( SGPRect *pSelectRegion )
 	for( y = top; y <= bottom; y++ ) for( x = left; x <= right; x++ )
 	{
 		uiMapIndex = y * WORLD_COLS + x;
-		if( uiMapIndex < NOWHERE )
+		if( uiMapIndex < GRIDSIZE )
 		{
 			usIndex = GetCaveTileIndexFromPerimeterValue( 0xff );
 			AddToUndoList( uiMapIndex );
@@ -805,7 +805,7 @@ void AddCaveSectionToWorld( SGPRect *pSelectRegion )
 	for( y = top - 1; y <= bottom + 1; y++ ) for( x = left - 1; x <= right + 1; x++ )
 	{
 		uiMapIndex = y * WORLD_COLS + x;
-		if( uiMapIndex < NOWHERE )
+		if( uiMapIndex < GRIDSIZE )
 		{
 			if( CaveAtGridNo( uiMapIndex ) )
 			{

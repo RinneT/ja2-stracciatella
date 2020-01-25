@@ -39,7 +39,7 @@
 
 #include "ContentManager.h"
 #include "GameInstance.h"
-#include "slog/slog.h"
+#include "Logger.h"
 
 static DOOR_STATUS* gpDoorStatus     = NULL;
 static UINT8        gubNumDoorStatus = 0;
@@ -116,7 +116,7 @@ try
 }
 catch (...)
 {
-	SLOGE(DEBUG_TAG_KEYS, "FAILED to LoadLockTable");
+	SLOGE("FAILED to LoadLockTable");
 	throw;
 }
 
@@ -573,7 +573,7 @@ void HandleDoorTrap(SOLDIERTYPE& s, DOOR const& d)
 			s.attacker = &s;
 			s.bBeingAttackedCount++;
 			gTacticalStatus.ubAttackBusyCount++;
-			SLOGD(DEBUG_TAG_KEYS, "Trap gone off. Busy count: %d", gTacticalStatus.ubAttackBusyCount);
+			SLOGD("Trap gone off. Busy count: %d", gTacticalStatus.ubAttackBusyCount);
 
 			SoldierTakeDamage(&s, 10 + PreRandom(10), 3 + PreRandom(3) * 1000,
 						TAKE_DAMAGE_ELECTRICITY, NULL);
@@ -586,7 +586,7 @@ void HandleDoorTrap(SOLDIERTYPE& s, DOOR const& d)
 			s.attacker = &s;
 			s.bBeingAttackedCount++;
 			gTacticalStatus.ubAttackBusyCount++;
-			SLOGD(DEBUG_TAG_KEYS, "Trap gone off. Busy count: %d", gTacticalStatus.ubAttackBusyCount);
+			SLOGD("Trap gone off. Busy count: %d", gTacticalStatus.ubAttackBusyCount);
 
 			SoldierTakeDamage(&s, 20 + PreRandom(20), 6 + PreRandom(6) * 1000, TAKE_DAMAGE_ELECTRICITY, NULL);
 			break;
@@ -628,6 +628,7 @@ BOOLEAN AttemptToBlowUpLock( SOLDIERTYPE * pSoldier, DOOR * pDoor )
 			// Get Z position, based on orientation....
 			sZ = 20;
 
+			AniParams = ANITILE_PARAMS{};
 			AniParams.sGridNo = sGridNo;
 			AniParams.ubLevelID = ANI_TOPMOST_LEVEL;
 			AniParams.sDelay = (INT16)( 100 );
@@ -1333,9 +1334,9 @@ void DropKeysInKeyRing(SOLDIERTYPE& s, GridNo const gridno, INT8 const level, Vi
 
 TEST(Keys, asserts)
 {
-	EXPECT_EQ(sizeof(LOCK), 46);
-	EXPECT_EQ(sizeof(DOOR), 14);
-	EXPECT_EQ(sizeof(DOOR_STATUS), 4);
+	EXPECT_EQ(sizeof(LOCK), 46u);
+	EXPECT_EQ(sizeof(DOOR), 14u);
+	EXPECT_EQ(sizeof(DOOR_STATUS), 4u);
 }
 
 #endif

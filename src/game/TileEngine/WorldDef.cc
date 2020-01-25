@@ -1,5 +1,3 @@
-#include <stdexcept>
-
 #include "Animation_Data.h"
 #include "Buffer.h"
 #include "Directories.h"
@@ -61,7 +59,11 @@
 
 #include "ContentManager.h"
 #include "GameInstance.h"
-#include "slog/slog.h"
+#include "Logger.h"
+
+#include <algorithm>
+#include <iterator>
+#include <stdexcept>
 
 #define SET_MOVEMENTCOST( a, b, c, d )		( ( gubWorldMovementCosts[ a ][ b ][ c ] < d ) ? ( gubWorldMovementCosts[ a ][ b ][ c ] = d ) : 0 );
 #define FORCE_SET_MOVEMENTCOST( a, b, c, d )	( gubWorldMovementCosts[ a ][ b ][ c ] = d )
@@ -90,7 +92,7 @@ static INT8 gbNewTileSurfaceLoaded[NUMBEROFTILETYPES];
 
 void SetAllNewTileSurfacesLoaded( BOOLEAN fNew )
 {
-	memset( gbNewTileSurfaceLoaded, fNew, sizeof( gbNewTileSurfaceLoaded ) );
+	std::fill(std::begin(gbNewTileSurfaceLoaded), std::end(gbNewTileSurfaceLoaded), fNew);
 }
 
 
@@ -157,16 +159,16 @@ void InitializeWorld()
 	//ProcessTilesetNamesForBPP();
 
 	// ATE: MEMSET LOG HEIGHT VALUES
-	memset( gTileTypeLogicalHeight, 1, sizeof( gTileTypeLogicalHeight ) );
+	std::fill(std::begin(gTileTypeLogicalHeight), std::end(gTileTypeLogicalHeight), 1);
 
 	// Memset tile database
-	memset( gTileDatabase, 0, sizeof( gTileDatabase ) );
+	std::fill(std::begin(gTileDatabase), std::end(gTileDatabase), TILE_ELEMENT{});
 
 	// Init surface list
-	memset( gTileSurfaceArray, 0, sizeof( gTileSurfaceArray ) );
+	std::fill(std::begin(gTileSurfaceArray), std::end(gTileSurfaceArray), nullptr);
 
 	// Init default surface list
-	memset( gbDefaultSurfaceUsed, 0, sizeof( gbDefaultSurfaceUsed ) );
+	std::fill(std::begin(gbDefaultSurfaceUsed), std::end(gbDefaultSurfaceUsed), 0);
 
 
 	// Initialize world data
@@ -270,7 +272,7 @@ void BuildTileShadeTables()
 	{ /* Because we're tweaking the RGB values in the text file, always force
 		 * rebuild the shadetables so that the user can tweak them in the same exe
 		 * session. */
-		memset(gbNewTileSurfaceLoaded, 1, sizeof(gbNewTileSurfaceLoaded));
+		std::fill(std::begin(gbNewTileSurfaceLoaded), std::end(gbNewTileSurfaceLoaded), 1);
 	}
 
 	for (UINT32 i = 0; i != NUMBEROFTILETYPES; ++i)
@@ -1076,8 +1078,6 @@ void RecompileLocalMovementCosts( INT16 sCentreGridNo )
 		for( sGridX = sCentreGridX - LOCAL_RADIUS; sGridX < sCentreGridX + LOCAL_RADIUS; sGridX++ )
 		{
 			usGridNo = MAPROWCOLTOPOS( sGridY, sGridX );
-			// times 2 for 2 levels, times 2 for UINT16s
-//			memset( &(gubWorldMovementCosts[usGridNo]), 0, MAXDIR * 2 * 2 );
 			if (isValidGridNo(usGridNo))
 			{
 				for( bDirLoop = 0; bDirLoop < MAXDIR; bDirLoop++)
@@ -1127,8 +1127,6 @@ void RecompileLocalMovementCostsFromRadius( INT16 sCentreGridNo, INT8 bRadius )
 			for( sGridX = sCentreGridX - bRadius; sGridX < sCentreGridX + bRadius; sGridX++ )
 			{
 				usGridNo = MAPROWCOLTOPOS( sGridY, sGridX );
-				// times 2 for 2 levels, times 2 for UINT16s
-	//			memset( &(gubWorldMovementCosts[usGridNo]), 0, MAXDIR * 2 * 2 );
 				if (isValidGridNo(usGridNo))
 				{
 					for( bDirLoop = 0; bDirLoop < MAXDIR; bDirLoop++)
@@ -1278,7 +1276,13 @@ void CompileWorldMovementCosts( )
 {
 	UINT16					usGridNo;
 
-	memset( gubWorldMovementCosts, 0, sizeof( gubWorldMovementCosts ) );
+	for (auto& i : gubWorldMovementCosts)
+	{
+		for (auto& j : i)
+		{
+			std::fill(std::begin(j), std::end(j), 0);
+		}
+	}
 
 	CompileWorldTerrainIDs();
  	for( usGridNo = 0; usGridNo < WORLD_MAX; usGridNo++ )
@@ -1458,6 +1462,13 @@ try
 		// Write combination of onroof and nothing
 		ubCombine = n_on_roofs & 0xf;
 		FileWrite(f, &ubCombine, sizeof(ubCombine));
+	}
+
+	if(getMajorMapVersion() == 6.00 && gubMinorMapVersion == 26)
+	{
+		// the data appears to be 37 INT32/UINT32 numbers and is present in russian ja2 maps
+		UINT8 data[148] = {0};
+		FileWrite(f, &data, sizeof(data));
 	}
 
 	UINT8 const test[] = { 1, 1 };
@@ -2037,19 +2048,21 @@ try
 	FLOAT dMajorMapVersion;
 	FileRead(f, &dMajorMapVersion, sizeof(dMajorMapVersion));
 
-	if(isRussianVersion() && (dMajorMapVersion != 6.00))
-	{
-		throw std::runtime_error("Incompatible major map version");
-	}
-
 	UINT8 ubMinorMapVersion;
 	if (dMajorMapVersion >= 4.00)
 	{
+		// major version 4 probably started in minor version 15 since
+		// this value is needed to detect the change in the object layer
 		FileRead(f, &ubMinorMapVersion, sizeof(ubMinorMapVersion));
 	}
 	else
 	{
 		ubMinorMapVersion = 0;
+	}
+
+	if (dMajorMapVersion > 6.00 || ubMinorMapVersion > 26)
+	{
+		throw std::runtime_error("newer versions are not supported");
 	}
 
 	// Read flags for world
@@ -2281,8 +2294,9 @@ try
 		}
 	}
 
-	if(isRussianVersion())
+	if(dMajorMapVersion == 6.00 && ubMinorMapVersion == 26)
 	{
+		// the data appears to be 37 INT32/UINT32 numbers and is present in russian ja2 maps
 		FileSeek(f, 148, FILE_SEEK_FROM_CURRENT);
 	}
 
@@ -2303,7 +2317,7 @@ try
 		gubMaxRoomNumber = max_room_no;
 	}
 
-	memset(gubWorldRoomHidden, TRUE, sizeof(gubWorldRoomHidden));
+	std::fill(std::begin(gubWorldRoomHidden), std::end(gubWorldRoomHidden), TRUE);
 
 	SetRelativeStartAndEndPercentage(0, 59, 61, L"Loading items...");
 	RenderProgressBar(0, 100);
@@ -2350,6 +2364,11 @@ try
 
 	LoadMapInformation(f);
 
+	if (dMajorMapVersion >= 4.00 && gMapInformation.ubMapVersion != ubMinorMapVersion)
+	{
+		throw new std::runtime_error("map version must match minor version");
+	}
+
 	if (uiFlags & MAP_FULLSOLDIER_SAVED)
 	{
 		SetRelativeStartAndEndPercentage(0, 86, 87, L"Loading placements...");
@@ -2385,6 +2404,27 @@ try
 		SetRelativeStartAndEndPercentage(0, 91, 92, L"Loading NPC schedules...");
 		RenderProgressBar(0, 0);
 		LoadSchedules(f);
+	}
+
+	// check unexpected versions
+	if (dMajorMapVersion == 6.00 && ubMinorMapVersion == 26)
+	{
+		// the unknown data is skipped
+		SLOGD("%s is a russian ja2 map", filename);
+	}
+	else if (dMajorMapVersion == 5.00 && ubMinorMapVersion >= 24 && ubMinorMapVersion <= 25)
+	{
+		SLOGD("%s is a non-russian ja2 map", filename);
+	}
+	else if (dMajorMapVersion == 5.00 && ubMinorMapVersion == 26)
+	{
+		// file structure is the same but the game has different items
+		SLOGW("%s is a ja2 wildfire map, expect problems", filename);
+	}
+	else
+	{
+		// ja2 demo has 3.13
+		SLOGW("%s has an unexpected version (%f %u), expect problems", filename, dMajorMapVersion, gMapInformation.ubMapVersion);
 	}
 
 	ValidateAndUpdateMapVersionIfNecessary();
@@ -2435,9 +2475,9 @@ try
 	RenderProgressBar(0, 100);
 	DequeueAllKeyBoardEvents();
 }
-catch (...)
+catch (const std::runtime_error& err)
 {
-	SET_ERROR("Could not load map file %s", filename);
+	SET_ERROR("Could not load map file '%s': %s", filename, err.what());
 	throw;
 }
 
@@ -2451,7 +2491,7 @@ void NewWorld()
 	for (INT32 cnt = 0; cnt != WORLD_MAX; ++cnt)
 	{
 		// Set land index
-		UINT16 const idx = rand() % 10;
+		UINT16 const idx = Random(10);
 		AddLandToHead(cnt, idx);
 	}
 
@@ -2533,7 +2573,7 @@ void TrashWorld(void)
 	}
 
 	// Zero world
-	memset(gpWorldLevelData, 0, WORLD_MAX * sizeof(*gpWorldLevelData));
+	std::fill_n(gpWorldLevelData, WORLD_MAX, MAP_ELEMENT{});
 
 	// Set some default flags
 	FOR_EACH_WORLD_TILE(i)
@@ -2581,7 +2621,7 @@ void LoadMapTileset(TileSetID const id)
 	}
 
 	// Init tile surface used values
-	memset(gbNewTileSurfaceLoaded, 0, sizeof(gbNewTileSurfaceLoaded));
+	std::fill(std::begin(gbNewTileSurfaceLoaded), std::end(gbNewTileSurfaceLoaded), 0);
 
 	if (id == giCurrentTilesetID) return;
 
@@ -2595,7 +2635,7 @@ void LoadMapTileset(TileSetID const id)
 	}
 	else
 	{
-		SLOGD(DEBUG_TAG_WORLDDEF, "Tileset %d has no callback function for movement costs. Using default.", id);
+		SLOGD("Tileset %d has no callback function for movement costs. Using default.", id);
 		SetTilesetOneTerrainValues();
 	}
 
@@ -2990,8 +3030,8 @@ static bool IsRoofVisibleForWireframe(GridNo const sMapPos)
 
 TEST(WorldDef, asserts)
 {
-	EXPECT_EQ(sizeof(TEAMSUMMARY), 15);
-	EXPECT_EQ(sizeof(SUMMARYFILE), 408);
+	EXPECT_EQ(sizeof(TEAMSUMMARY), 15u);
+	EXPECT_EQ(sizeof(SUMMARYFILE), 408u);
 }
 
 #endif

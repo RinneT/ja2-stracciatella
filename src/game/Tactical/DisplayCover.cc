@@ -25,6 +25,8 @@
 #include "GameInstance.h"
 #include "WeaponModels.h"
 
+#include <algorithm>
+
 #define DC_MAX_COVER_RANGE		31
 
 #define DC__SOLDIER_VISIBLE_RANGE	31
@@ -497,7 +499,10 @@ static void CalculateVisibleToSoldierAroundGridno(INT16 sTargetGridNo, INT8 bSea
 	BOOLEAN fRoof=FALSE;
 
 	//clear out the struct
-	memset( gVisibleToSoldierStruct, 0, sizeof( VISIBLE_TO_SOLDIER_STRUCT ) * DC__SOLDIER_VISIBLE_RANGE * DC__SOLDIER_VISIBLE_RANGE );
+	for (int i = 0; i < DC__SOLDIER_VISIBLE_RANGE; ++i)
+	{
+		std::fill_n(gVisibleToSoldierStruct[i], DC__SOLDIER_VISIBLE_RANGE, VISIBLE_TO_SOLDIER_STRUCT{});
+	}
 
 	if( bSearchRange > ( DC_MAX_COVER_RANGE / 2 ) )
 		bSearchRange = ( DC_MAX_COVER_RANGE / 2 );
@@ -626,7 +631,7 @@ static void AddVisibleToSoldierToEachGridNo(void)
 
 			else
 			{
-				SLOGE(DEBUG_TAG_ASSERTS, "AddVisibleToSoldierToEachGridNo: invalid VisibleToSoldier");
+				SLOGA("AddVisibleToSoldierToEachGridNo: invalid VisibleToSoldier");
 			}
 		}
 	}
@@ -679,7 +684,7 @@ void RemoveVisibleGridNoAtSelectedGridNo()
 
 			else
 			{
-				SLOGE(DEBUG_TAG_ASSERTS, "RemoveVisibleGridNoAtSelectedGridNo: invalid VisibleToSoldier");
+				SLOGA("RemoveVisibleGridNoAtSelectedGridNo: invalid VisibleToSoldier");
 			}
 		}
 	}

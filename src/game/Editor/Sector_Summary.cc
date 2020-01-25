@@ -42,7 +42,9 @@
 
 #include "ContentManager.h"
 #include "GameInstance.h"
-#include "slog/slog.h"
+#include "Logger.h"
+
+#include <algorithm>
 
 #define DEVINFO_DIR "../DevInfo"
 
@@ -601,10 +603,10 @@ static void RenderItemDetails(void)
 	xp = 5;
 	if (gubSummaryItemMode != ITEMMODE_ENEMY)
 	{
-		memset( uiTriggerQuantity, 0, 32 );
-		memset( uiActionQuantity, 0, 32 );
-		memset( uiTriggerExistChance, 0, 32 );
-		memset( uiActionExistChance, 0, 32 );
+		std::fill_n(uiTriggerQuantity, 32, 0);
+		std::fill_n(uiActionQuantity, 32, 0);
+		std::fill_n(uiTriggerExistChance, 32, 0);
+		std::fill_n(uiActionExistChance, 32, 0);
 		for( index = 1; index < MAXITEMS; index++ )
 		{
 			uiQuantity = 0;
@@ -1652,6 +1654,7 @@ BOOLEAN HandleSummaryInput( InputAtom *pEvent )
 					gfOverheadMapDirty = TRUE;
 					return FALSE;
 				}
+				break;
 			case SDLK_RETURN:
 				if( GetActiveFieldID() == 1 )
 					SelectNextField();
@@ -1745,7 +1748,7 @@ BOOLEAN HandleSummaryInput( InputAtom *pEvent )
  * valid coordinate name, analyses it, and builds a new global summary file. */
 static void CreateGlobalSummary(void)
 {
-	SLOGD(DEBUG_TAG_EDITOR, "Generating GlobalSummary Information...");
+	SLOGD("Generating GlobalSummary Information...");
 
 	gfGlobalSummaryExists = FALSE;
 
@@ -1765,7 +1768,7 @@ static void CreateGlobalSummary(void)
 	RegenerateSummaryInfoForAllOutdatedMaps();
 	gfRenderSummary = TRUE;
 
-	SLOGD(DEBUG_TAG_EDITOR, "GlobalSummary Information generated successfully.");
+	SLOGD("GlobalSummary Information generated successfully.");
 }
 
 
@@ -2087,7 +2090,11 @@ static BOOLEAN LoadSummary(const INT32 x, const INT32 y, const UINT8 level, cons
 		/* Even if the info is outdated (but existing), allocate the structure, but
 		 * indicate that the info is bad. */
 		SUMMARYFILE* const sum = MALLOC(SUMMARYFILE);
-		fread(sum, sizeof(SUMMARYFILE), 1, f_sum);
+		if (fread(sum, sizeof(SUMMARYFILE), 1, f_sum) != 1)
+		{
+			// failed, initialize and force update
+			*sum = SUMMARYFILE{};
+		}
 		fclose(f_sum);
 
 		if (sum->ubSummaryVersion < MINIMUMVERSION ||
@@ -2113,7 +2120,7 @@ static BOOLEAN LoadSummary(const INT32 x, const INT32 y, const UINT8 level, cons
 
 static void LoadGlobalSummary(void)
 {
-	SLOGD(DEBUG_TAG_EDITOR, "Executing LoadGlobalSummary()...");
+	SLOGD("Executing LoadGlobalSummary()...");
 
 	gfMustForceUpdateAllMaps        = FALSE;
 	gusNumberOfMapsToBeForceUpdated = 0;
@@ -2122,7 +2129,7 @@ static void LoadGlobalSummary(void)
 	gfGlobalSummaryExists = attr != FILE_ATTR_ERROR && attr & FILE_ATTR_DIRECTORY;
 	if (!gfGlobalSummaryExists)
 	{
-		SLOGW(DEBUG_TAG_EDITOR, "LoadGlobalSummary() aborted -- doesn't exist on this local computer.");
+		SLOGW("LoadGlobalSummary() aborted -- doesn't exist on this local computer.");
 		return;
 	}
 
@@ -2146,15 +2153,15 @@ static void LoadGlobalSummary(void)
 			if (LoadSummary(x, y, 7, "_b3_a"))  sector_levels |= ALTERNATE_B3_MASK;     // alternate B2 level
 			gbSectorLevels[x][y] = sector_levels;
 		}
-		SLOGD(DEBUG_TAG_EDITOR, "Sector Row %c complete...", y + 'A');
+		SLOGD("Sector Row %c complete...", y + 'A');
 	}
 
 	if (gfMustForceUpdateAllMaps)
 	{
-		SLOGW(DEBUG_TAG_EDITOR, "A MAJOR MAP UPDATE EVENT HAS BEEN DETECTED FOR %d MAPS!", gusNumberOfMapsToBeForceUpdated);
+		SLOGW("A MAJOR MAP UPDATE EVENT HAS BEEN DETECTED FOR %d MAPS!", gusNumberOfMapsToBeForceUpdated);
 	}
 
-	SLOGD(DEBUG_TAG_EDITOR, "LoadGlobalSummary() finished...");
+	SLOGD("LoadGlobalSummary() finished...");
 }
 
 

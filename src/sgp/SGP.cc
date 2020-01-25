@@ -1,14 +1,4 @@
-/* The implementation of swprintf() is broken on FreeBSD and sometimes fails if
- * LC_TYPE is not set to UTF-8.  This happens when characters, which cannot be
- * represented by the current LC_CTYPE, are printed. */
-#if defined __FreeBSD__
-#	define BROKEN_SWPRINTF
-#endif
-
-#if defined BROKEN_SWPRINTF
-#	include <locale.h>
-#endif
-
+#include <clocale>
 #include <exception>
 #include <new>
 
@@ -41,10 +31,9 @@
 #include "JsonUtility.h"
 #include "ModPackContentManager.h"
 #include "policy/GamePolicy.h"
-#include "sgp/UTF8String.h"
 #include "RustInterface.h"
 
-#include "slog/slog.h"
+#include "Logger.h"
 
 #ifdef WITH_UNITTESTS
 #include "gtest/gtest.h"
@@ -140,7 +129,7 @@ static BOOLEAN gfGameInitialized = FALSE;
 /** Deinitialize the game an exit. */
 static void deinitGameAndExit()
 {
-	SLOGD(DEBUG_TAG_SGP, "Deinitializing Game");
+	SLOGD("Deinitializing Game");
 	// If we are in Dead is Dead mode, save before exit
 	// Does this code also fire on crash? Let's hope not!
 	DoDeadIsDeadSaveIfNecessary();
@@ -151,30 +140,30 @@ static void deinitGameAndExit()
 	{
 		ShutdownGame();
 	}
-	SLOGD(DEBUG_TAG_SGP, "Shutting Down Button System");
+	SLOGD("Shutting Down Button System");
 	ShutdownButtonSystem();
 	MSYS_Shutdown();
 
 #ifndef UTIL
-	SLOGD(DEBUG_TAG_SGP, "Shutting Down Sound Manager");
+	SLOGD("Shutting Down Sound Manager");
 	ShutdownSoundManager();
 #endif
 
 #ifdef SGP_VIDEO_DEBUGGING
-	SLOGD(DEBUG_TAG_SGP, "Dumping Video Info");
+	SLOGD("Dumping Video Info");
 	PerformVideoInfoDumpIntoFile( "SGPVideoShutdownDump.txt", FALSE );
 #endif
 
-	SLOGD(DEBUG_TAG_SGP, "Shutting Down Video Surface Manager");
+	SLOGD("Shutting Down Video Surface Manager");
 	ShutdownVideoSurfaceManager();
-	SLOGD(DEBUG_TAG_SGP, "Shutting Down Video Object Manager");
+	SLOGD("Shutting Down Video Object Manager");
 	ShutdownVideoObjectManager();
-	SLOGD(DEBUG_TAG_SGP, "Shutting Down Video Manager");
+	SLOGD("Shutting Down Video Manager");
 	ShutdownVideoManager();
-	SLOGD(DEBUG_TAG_SGP, "Shutting Down Memory Manager");
+	SLOGD("Shutting Down Memory Manager");
 	ShutdownMemoryManager();  // must go last, for MemDebugCounter to work right...
 
-	SLOGD(DEBUG_TAG_SGP, "Shutting Down SDL");
+	SLOGD("Shutting Down SDL");
 	SDL_Quit();
 
 	exit(0);
@@ -238,7 +227,7 @@ static void MainLoop(int msPerGameCycle)
 				GameLoop();
 				gameCycleMS = GetClock() - gameCycleMS;
 
-				if(gameCycleMS < msPerGameCycle)
+				if(static_cast<int>(gameCycleMS) < msPerGameCycle)
 				{
 					SDL_Delay(msPerGameCycle - gameCycleMS);
 				}
@@ -262,37 +251,73 @@ ContentManager *GCM = NULL;
 
 ////////////////////////////////////////////////////////////
 
+/// Sets C locale to something that supports unicode.
+/// The C++ locale is unchanged (VS2015 hangs for unknown reasons).
+///
+/// There is no way to query available locales so this is the most portable
+/// way to get a locale that supports unicode.
+void SetUnicodeLocale()
+{
+	static const char* LOCALES[] = {
+		// custom locale set at configure time
+#if defined WITH_CUSTOM_LOCALE
+		WITH_CUSTOM_LOCALE,
+#endif
+		// the preferred locale with UTF-8 encoding
+		".UTF8", ".UTF-8",
+		// a specific locale with UTF-8 encoding
+		"C.UTF-8", "en_US.UTF8", "en_US.UTF-8", "English_US.UTF8", "en_GB.UTF-8",
+		// give up
+		nullptr
+	};
+
+	for (const char* name : LOCALES)
+	{
+		if (name == nullptr)
+		{
+			if (setlocale(LC_ALL, "C") != nullptr)
+			{
+				fprintf(stderr, "WARNING: Failed to set a unicode locale, using the C locale (might accept only ASCII).\n");
+			}
+			else
+			{
+				fprintf(stderr, "WARNING: Failed to set a unicode locale and the C locale...\n");
+			}
+			return;
+		}
+		if (setlocale(LC_ALL, name) != nullptr)
+		{
+			return;
+		}
+		// try next locale
+	}
+}
+
 int main(int argc, char* argv[])
 {
+	SetUnicodeLocale();
+
 	std::string exeFolder = FileMan::getParentPath(argv[0], true);
 
-#if defined BROKEN_SWPRINTF
-	if (setlocale(LC_CTYPE, "UTF-8") == NULL)
-	{
-		fprintf(stderr, "WARNING: Failed to set LC_CTYPE to UTF-8. Some strings might get garbled.\n");
-	}
-#endif
-
 	// init logging
-	SLOG_Init(SLOG_STDERR, "ja2.log");
-	SLOG_SetLevel(SLOG_WARNING, SLOG_WARNING);
+	Logger_initialize("ja2.log");
 
-	EngineOptions* params = create_engine_options(argv, argc);
+	RustPointer<EngineOptions> params(EngineOptions_create(argv, argc));
 	if (params == NULL) {
 		return EXIT_FAILURE;
 	}
 
-	if (should_show_help(params)) {
+	if (EngineOptions_shouldShowHelp(params.get())) {
 		return EXIT_SUCCESS;
 	}
 
-	if (should_start_in_fullscreen(params)) {
+	if (EngineOptions_shouldStartInFullscreen(params.get())) {
 		VideoSetFullScreen(TRUE);
-	} else if (should_start_in_window(params)) {
+	} else if (EngineOptions_shouldStartInWindow(params.get())) {
 		VideoSetFullScreen(FALSE);
 	}
 
-	if (should_start_without_sound(params)) {
+	if (EngineOptions_shouldStartWithoutSound(params.get())) {
 		SoundEnableSound(FALSE);
 	}
 
@@ -300,43 +325,45 @@ int main(int argc, char* argv[])
 	SDL_version sdl_version_linked;
 	SDL_GetVersion(&sdl_version_linked);
 	if (sdl_version_linked.major == 2 && sdl_version_linked.minor == 0 && sdl_version_linked.patch == 6) {
-		SLOGE(DEBUG_TAG_SGP, "Detected SDL2 2.0.6. Disabled sound.\n"
+		SLOGE("Detected SDL2 2.0.6. Disabled sound.\n"
 							 "This version of SDL2 has a fatal bug in the audio conversion routines.\n"
 							 "Either downgrade to version 2.0.5 or upgrade to version 2.0.7 or later.");
 		SoundEnableSound(FALSE);
 	}
 
-	if (should_start_in_debug_mode(params)) {
-		SLOG_SetLevel(SLOG_DEBUG, SLOG_DEBUG);
+	if (EngineOptions_shouldStartInDebugMode(params.get())) {
+		Logger_setLevel(LogLevel::Debug);
 		GameState::getInstance()->setDebugging(true);
 	}
 
-	if (should_run_editor(params)) {
+	if (EngineOptions_shouldRunEditor(params.get())) {
 		GameState::getInstance()->setEditorMode(false);
 	}
 
-	bool result = g_ui.setScreenSize(get_resolution_x(params), get_resolution_y(params));
+	uint16_t width = EngineOptions_getResolutionX(params.get());
+	uint16_t height = EngineOptions_getResolutionY(params.get());
+	bool result = g_ui.setScreenSize(width, height);
 	if(!result)
 	{
-		SLOGE(DEBUG_TAG_SGP, "Failed to set screen resolution %d x %d", get_resolution_x(params), get_resolution_y(params));
+		SLOGE("Failed to set screen resolution %d x %d", width, height);
 		return EXIT_FAILURE;
 	}
 
-	if (should_run_unittests(params)) {
+	if (EngineOptions_shouldRunUnittests(params.get())) {
 #ifdef WITH_UNITTESTS
 		testing::InitGoogleTest(&argc, argv);
 		return RUN_ALL_TESTS();
 #else
-		SLOGW(DEBUG_TAG_SGP, "This executable does not include unit tests.");
+		SLOGW("This executable does not include unit tests.");
 #endif
 	}
 
-	GameVersion version = get_resource_version(params);
+	GameVersion version = EngineOptions_getResourceVersion(params.get());
 	setGameVersion(version);
 
-	VideoScaleQuality scalingQuality = get_scaling_quality(params);
+	VideoScaleQuality scalingQuality = EngineOptions_getScalingQuality(params.get());
 
-	FLOAT brightness = get_brightness(params);
+	FLOAT brightness = EngineOptions_getBrightness(params.get());
 
 	////////////////////////////////////////////////////////////
 
@@ -354,16 +381,12 @@ int main(int argc, char* argv[])
 #endif
 
 	// this one needs to go ahead of all others (except Debug), for MemDebugCounter to work right...
-	SLOGD(DEBUG_TAG_SGP, "Initializing Memory Manager");
+	SLOGD("Initializing Memory Manager");
 	InitializeMemoryManager();
 
-	SLOGD(DEBUG_TAG_SGP, "Initializing Game Resources");
-	char* rustConfigFolderPath = get_stracciatella_home(params);
-	char* rustResRootPath = get_vanilla_data_dir(params);
-	std::string configFolderPath = std::string(rustConfigFolderPath);
-	std::string gameResRootPath = std::string(rustResRootPath);
-	free_rust_string(rustConfigFolderPath);
-	free_rust_string(rustResRootPath);
+	SLOGD("Initializing Game Resources");
+	RustPointer<char> configFolderPath(EngineOptions_getStracciatellaHome(params.get()));
+	RustPointer<char> gameResRootPath(EngineOptions_getVanillaGameDir(params.get()));
 
 	std::string extraDataDir = EXTRA_DATA_DIR;
 	if(extraDataDir.empty())
@@ -374,87 +397,108 @@ int main(int argc, char* argv[])
 
 	std::string externalizedDataPath = FileMan::joinPaths(extraDataDir, "externalized");
 
-	FileMan::switchTmpFolder(configFolderPath);
+	FileMan::switchTmpFolder(configFolderPath.get());
 
 	DefaultContentManager *cm;
 
-	if(get_number_of_mods(params) > 0)
+	uint32_t n = EngineOptions_getModsLength(params.get());
+	if(n > 0)
 	{
-		char* rustModName = get_mod(params, 0);
-		std::string modName = std::string(rustModName);
-		free_rust_string(rustModName);
-		std::string modResFolder = FileMan::joinPaths(FileMan::joinPaths(FileMan::joinPaths(extraDataDir, "mods"), modName), "data");
+		std::vector<std::string> modNames;
+		std::vector<std::string> modResFolders;
+		for (uint32_t i = 0; i < n; ++i)
+		{
+			RustPointer<char> modName(EngineOptions_getMod(params.get(), i));
+			std::string modResFolder = FileMan::joinPaths(FileMan::joinPaths(FileMan::joinPaths(extraDataDir, "mods"), modName.get()), "data");
+			modNames.emplace_back(modName.get());
+			modResFolders.emplace_back(modResFolder);
+		}
 		cm = new ModPackContentManager(version,
-						modName, modResFolder, configFolderPath,
-						gameResRootPath, externalizedDataPath);
-		SLOGI(DEBUG_TAG_SGP,"------------------------------------------------------------------------------");
-		SLOGI(DEBUG_TAG_SGP,"JA2 Home Dir:                  '%s'", configFolderPath.c_str());
-		SLOGI(DEBUG_TAG_SGP,"Root game resources directory: '%s'", gameResRootPath.c_str());
-		SLOGI(DEBUG_TAG_SGP,"Extra data directory:          '%s'", extraDataDir.c_str());
-		SLOGI(DEBUG_TAG_SGP,"Data directory:                '%s'", cm->getDataDir().c_str());
-		SLOGI(DEBUG_TAG_SGP,"Tilecache directory:           '%s'", cm->getTileDir().c_str());
-		SLOGI(DEBUG_TAG_SGP,"Saved games directory:         '%s'", cm->getSavedGamesFolder().c_str());
-		SLOGI(DEBUG_TAG_SGP,"------------------------------------------------------------------------------");
-		SLOGI(DEBUG_TAG_SGP,"MOD name:                      '%s'", modName.c_str());
-		SLOGI(DEBUG_TAG_SGP,"MOD resource directory:        '%s'", modResFolder.c_str());
-		SLOGI(DEBUG_TAG_SGP,"------------------------------------------------------------------------------");
+						modNames, modResFolders, configFolderPath.get(),
+						gameResRootPath.get(), externalizedDataPath);
+		SLOGI("------------------------------------------------------------------------------");
+		SLOGI("JA2 Home Dir:                  '%s'", configFolderPath.get());
+		SLOGI("Root game resources directory: '%s'", gameResRootPath.get());
+		SLOGI("Extra data directory:          '%s'", extraDataDir.c_str());
+		SLOGI("Data directory:                '%s'", cm->getDataDir().c_str());
+		SLOGI("Tilecache directory:           '%s'", cm->getTileDir().c_str());
+		SLOGI("Saved games directory:         '%s'", cm->getSavedGamesFolder().c_str());
+		SLOGI("------------------------------------------------------------------------------");
+		for (uint32_t i = 0; i < n; ++i)
+		{
+			SLOGI("MOD name:                      '%s'", modNames[i].c_str());
+			SLOGI("MOD resource directory:        '%s'", modResFolders[i].c_str());
+			SLOGI("------------------------------------------------------------------------------");
+		}
 	}
 	else
 	{
 		cm = new DefaultContentManager(version,
-						configFolderPath,
-						gameResRootPath, externalizedDataPath);
-		SLOGI(DEBUG_TAG_SGP,"------------------------------------------------------------------------------");
-		SLOGI(DEBUG_TAG_SGP,"JA2 Home Dir:                  '%s'", configFolderPath.c_str());
-		SLOGI(DEBUG_TAG_SGP,"Root game resources directory: '%s'", gameResRootPath.c_str());
-		SLOGI(DEBUG_TAG_SGP,"Extra data directory:          '%s'", extraDataDir.c_str());
-		SLOGI(DEBUG_TAG_SGP,"Data directory:                '%s'", cm->getDataDir().c_str());
-		SLOGI(DEBUG_TAG_SGP,"Tilecache directory:           '%s'", cm->getTileDir().c_str());
-		SLOGI(DEBUG_TAG_SGP,"Saved games directory:         '%s'", cm->getSavedGamesFolder().c_str());
-		SLOGI(DEBUG_TAG_SGP,"------------------------------------------------------------------------------");
+						configFolderPath.get(),
+						gameResRootPath.get(), externalizedDataPath);
+		SLOGI("------------------------------------------------------------------------------");
+		SLOGI("JA2 Home Dir:                  '%s'", configFolderPath.get());
+		SLOGI("Root game resources directory: '%s'", gameResRootPath.get());
+		SLOGI("Extra data directory:          '%s'", extraDataDir.c_str());
+		SLOGI("Data directory:                '%s'", cm->getDataDir().c_str());
+		SLOGI("Tilecache directory:           '%s'", cm->getTileDir().c_str());
+		SLOGI("Saved games directory:         '%s'", cm->getSavedGamesFolder().c_str());
+		SLOGI("------------------------------------------------------------------------------");
 	}
 
-	free_engine_options(params);
-
 	std::vector<std::string> libraries = cm->getListOfGameResources();
-	cm->initGameResouces(configFolderPath, libraries);
+	cm->initGameResouces(configFolderPath.get(), libraries);
+
+	// free editor.slf has the lowest priority (last library) and is optional
+	if(EngineOptions_shouldRunEditor(params.get()))
+	{
+		try
+		{
+			cm->addExtraResources(extraDataDir, "editor.slf");
+			SLOGI("Free editor.slf loaded from '%s'", extraDataDir.c_str());
+		}
+		catch(const LibraryFileNotFoundException& ex)
+		{
+			SLOGI("%s", ex.what());
+		}
+	}
 
 	if(!cm->loadGameData())
 	{
-		SLOGI(DEBUG_TAG_SGP,"Failed to load the game data.");
+		SLOGI("Failed to load the game data.");
 	}
 	else
 	{
 
 		GCM = cm;
 
-		SLOGD(DEBUG_TAG_SGP, "Initializing Video Manager");
+		SLOGD("Initializing Video Manager");
 		InitializeVideoManager(scalingQuality);
 		VideoSetBrightness(brightness);
 
-		SLOGD(DEBUG_TAG_SGP, "Initializing Video Object Manager");
+		SLOGD("Initializing Video Object Manager");
 		InitializeVideoObjectManager();
 
-		SLOGD(DEBUG_TAG_SGP, "Initializing Video Surface Manager");
+		SLOGD("Initializing Video Surface Manager");
 		InitializeVideoSurfaceManager();
 
 		InitJA2SplashScreen();
 
 		// Initialize Font Manager
-		SLOGD(DEBUG_TAG_SGP, "Initializing the Font Manager");
+		SLOGD("Initializing the Font Manager");
 		// Init the manager and copy the TransTable stuff into it.
 		InitializeFontManager();
 
-		SLOGD(DEBUG_TAG_SGP, "Initializing Sound Manager");
+		SLOGD("Initializing Sound Manager");
 #ifndef UTIL
 		InitializeSoundManager();
 #endif
 
-		SLOGD(DEBUG_TAG_SGP, "Initializing Random");
+		SLOGD("Initializing Random");
 		// Initialize random number generator
 		InitializeRandom(); // no Shutdown
 
-		SLOGD(DEBUG_TAG_SGP, "Initializing Game Manager");
+		SLOGD("Initializing Game Manager");
 		// Initialize the Game
 		InitializeGame();
 
@@ -480,15 +524,13 @@ int main(int argc, char* argv[])
 			SetIntroType(INTRO_SPLASH);
 		}
 
-		SLOGD(DEBUG_TAG_SGP, "Running Game");
+		SLOGD("Running Game");
 
 		/* At this point the SGP is set up, which means all I/O, Memory, tools, etc.
 		 * are available. All we need to do is attend to the gaming mechanics
 		 * themselves */
 		MainLoop(gamepolicy(ms_per_game_cycle));
 	}
-
-	SLOG_Deinit();
 
 	delete cm;
 	GCM = NULL;
@@ -500,14 +542,72 @@ int main(int argc, char* argv[])
 					STRING_ENC_TYPE encType,
 					const char *dialogFile, const char *outputFile)
 {
-	std::vector<UTF8String*> quotes;
+	std::vector<ST::string*> quotes;
 	std::vector<std::string> quotes_str;
 	cm->loadAllDialogQuotes(encType, dialogFile, quotes);
 	for(int i = 0; i < quotes.size(); i++)
 	{
-		quotes_str.push_back(std::string(quotes[i]->getUTF8()));
+		quotes_str.push_back(quotes[i]->to_std_string());
 		delete quotes[i];
-		quotes[i] = NULL;
+		quotes[i] = nullptr;
 	}
 	JsonUtility::writeToFile(outputFile, quotes_str);
 }*/
+
+#ifdef WITH_UNITTESTS
+#include "gtest/gtest.h"
+
+struct TestStruct {
+	int a;
+	int b;
+	int c[2];
+};
+
+TEST(cpp_language, list_initialization)
+{
+	// since C++11: https://en.cppreference.com/w/cpp/language/list_initialization
+	{
+		TestStruct tmp{};
+		EXPECT_EQ(tmp.a, 0);
+		EXPECT_EQ(tmp.b, 0);
+		EXPECT_EQ(tmp.c[0], 0);
+		EXPECT_EQ(tmp.c[1], 0);
+	}
+	{
+		TestStruct tmp{1, 2, {3, 4}};
+		EXPECT_EQ(tmp.a, 1);
+		EXPECT_EQ(tmp.b, 2);
+		EXPECT_EQ(tmp.c[0], 3);
+		EXPECT_EQ(tmp.c[1], 4);
+	}
+	{
+		TestStruct tmp = TestStruct{};
+		EXPECT_EQ(tmp.a, 0);
+		EXPECT_EQ(tmp.b, 0);
+		EXPECT_EQ(tmp.c[0], 0);
+		EXPECT_EQ(tmp.c[1], 0);
+	}
+	{
+		TestStruct tmp = TestStruct{1, 2, {3, 4}};
+		EXPECT_EQ(tmp.a, 1);
+		EXPECT_EQ(tmp.b, 2);
+		EXPECT_EQ(tmp.c[0], 3);
+		EXPECT_EQ(tmp.c[1], 4);
+	}
+	{
+		TestStruct tmp = {};
+		EXPECT_EQ(tmp.a, 0);
+		EXPECT_EQ(tmp.b, 0);
+		EXPECT_EQ(tmp.c[0], 0);
+		EXPECT_EQ(tmp.c[1], 0);
+	}
+	{
+		TestStruct tmp = {1, 2, {3, 4}};
+		EXPECT_EQ(tmp.a, 1);
+		EXPECT_EQ(tmp.b, 2);
+		EXPECT_EQ(tmp.c[0], 3);
+		EXPECT_EQ(tmp.c[1], 4);
+	}
+}
+
+#endif // WITH_UNITTESTS

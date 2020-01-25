@@ -1,5 +1,3 @@
-#include <stdexcept>
-
 #include "Items.h"
 #include "Handle_Items.h"
 #include "Overhead.h"
@@ -27,6 +25,9 @@
 #include "MagazineModel.h"
 #include "WeaponModels.h"
 
+#include <algorithm>
+#include <stdexcept>
+
 //Global dynamic array of all of the items in a loaded map.
 WORLDITEM *gWorldItems = NULL;
 UINT32    guiNumWorldItems = 0;
@@ -52,8 +53,7 @@ static INT32 GetFreeWorldBombIndex(void)
 	newWorldBombs = REALLOC(gWorldBombs, WORLDBOMB, guiNumWorldBombs);
 
 	//Clear the rest of the new array
-	memset( &newWorldBombs[ uiOldNumWorldBombs ], 0,
-		sizeof( WORLDBOMB ) * ( guiNumWorldBombs - uiOldNumWorldBombs ) );
+	std::fill_n(newWorldBombs + uiOldNumWorldBombs, guiNumWorldBombs - uiOldNumWorldBombs, WORLDBOMB{});
 	gWorldBombs = newWorldBombs;
 
 	// Return uiCount.....
@@ -170,8 +170,7 @@ static INT32 GetFreeWorldItemIndex(void)
 	newWorldItems = REALLOC(gWorldItems, WORLDITEM, guiNumWorldItems);
 
 	//Clear the rest of the new array
-	memset( &newWorldItems[ uiOldNumWorldItems ], 0,
-		sizeof( WORLDITEM ) * ( guiNumWorldItems - uiOldNumWorldItems ) );
+	std::fill_n(newWorldItems + uiOldNumWorldItems, guiNumWorldItems - uiOldNumWorldItems, WORLDITEM{});
 	gWorldItems = newWorldItems;
 
 	// Return uiCount.....
@@ -193,7 +192,7 @@ INT32 AddItemToWorld(INT16 sGridNo, const OBJECTTYPE* const pObject, const UINT8
 	if (sGridNo == NOWHERE)
 	{
 		// Display warning.....
-		SLOGW(DEBUG_TAG_HANDLEITEMS, "Item %d was given invalid grid location %d. Please report", pObject->usItem, sGridNo);
+		SLOGW("Item %d was given invalid grid location %d. Please report", pObject->usItem, sGridNo);
 		return -1;
 	}
 
@@ -481,7 +480,7 @@ void RefreshWorldItemsIntoItemPools(const WORLDITEM* const items, const INT32 it
 
 TEST(WorldItems, asserts)
 {
-	EXPECT_EQ(sizeof(WORLDITEM), 52);
+	EXPECT_EQ(sizeof(WORLDITEM), 52u);
 }
 
 #endif

@@ -73,6 +73,8 @@
 #include "ContentManager.h"
 #include "GameInstance.h"
 
+#include <algorithm>
+#include <iterator>
 
 // various reason an assignment can be aborted before completion
 enum AssignmentAbortReason
@@ -255,7 +257,10 @@ BOOLEAN IsSoldierCloseEnoughToSAMControlPanel( SOLDIERTYPE *pSoldier );
 void InitSectorsWithSoldiersList( void )
 {
 	// init list of sectors
-	memset( &fSectorsWithSoldiers, 0, sizeof( fSectorsWithSoldiers ) );
+	for (auto& i : fSectorsWithSoldiers)
+	{
+		std::fill(std::begin(i), std::end(i), 0);
+	}
 }
 
 
@@ -657,7 +662,7 @@ static INT8 GetTrainingStatValue(const SOLDIERTYPE* const s, const INT8 stat)
 		// NOTE: Wisdom can't be trained!
 
 		default:
-			SLOGE(DEBUG_TAG_SOLDIER, "Unknown training stat %d", stat);
+			SLOGE("Unknown training stat %d", stat);
 			return 0;
 	}
 }
@@ -2086,7 +2091,7 @@ static void HandleTrainingInSector(const INT16 sMapX, const INT16 sMapY, const I
 
 	// init trainer list
 	const SOLDIERTYPE* pStatTrainerList[NUM_TRAINABLE_STATS]; // can't have more "best" trainers than trainable stats
-	memset( pStatTrainerList, 0, sizeof( pStatTrainerList ) );
+	std::fill(std::begin(pStatTrainerList), std::end(pStatTrainerList), nullptr);
 
 	// build list of teammate trainers in this sector.
 
@@ -2176,7 +2181,7 @@ static void HandleTrainingInSector(const INT16 sMapX, const INT16 sMapY, const I
 	if (CanSectorContainMilita(sMapX, sMapY, bZ))
 	{
 		// init town trainer list
-		memset( TownTrainer, 0, sizeof( TownTrainer ) );
+		std::fill(std::begin(TownTrainer), std::end(TownTrainer), TOWN_TRAINER_TYPE{});
 		ubTownTrainers = 0;
 
 		// build list of all the town trainers in this sector and their training pts
@@ -2303,7 +2308,7 @@ INT16 GetBonusTrainingPtsDueToInstructor(const SOLDIERTYPE* pInstructor, const S
 		// NOTE: Wisdom can't be trained!
 		default:
 			// BETA message
-			SLOGE(DEBUG_TAG_SOLDIER, "GetBonusTrainingPtsDueToInstructor: Unknown bTrainStat %d", bTrainStat);
+			SLOGE("GetBonusTrainingPtsDueToInstructor: Unknown bTrainStat %d", bTrainStat);
 			return(0);
 	}
 
@@ -2531,7 +2536,7 @@ static void TrainSoldierWithPts(SOLDIERTYPE* const s, const INT16 train_pts)
 		// NOTE: Wisdom can't be trained!
 		default:
 			// BETA message
-			SLOGE(DEBUG_TAG_SOLDIER, "TrainSoldierWithPts: Unknown bTrainStat %d", s->bTrainStat);
+			SLOGE("TrainSoldierWithPts: Unknown bTrainStat %d", s->bTrainStat);
 			return;
 	}
 
@@ -4136,10 +4141,12 @@ static void CreateDestroyMouseRegionsForSquadMenu()
 		INT32  const  w    = area.w;
 		INT32  const  h    = GetLineSpace(ghSquadBox) + GetFontHeight(GetBoxFont(ghSquadBox));
 
-		INT32 i;
-		for (i = 0; i < GetNumberOfLinesOfTextInBox(ghSquadBox) - 1; ++i)
+		// add mouse region for each line of text except cancel
+		UINT32 lines = GetNumberOfLinesOfTextInBox(ghSquadBox);
+		if (lines > 0) lines--;
+		UINT32 i;
+		for (i = 0; i < lines; ++i)
 		{
-			// add mouse region for each line of text
 			MOUSE_REGION* const r = &gSquadMenuRegion[i];
 			MSYS_DefineRegion(r, x, y, x + w, y + h, MSYS_PRIORITY_HIGHEST - 2, MSYS_NO_CURSOR, SquadMenuMvtCallBack, SquadMenuBtnCallback);
 			MSYS_SetRegionUserData(r, 0, i);
@@ -4619,6 +4626,7 @@ static void SquadMenuBtnCallback(MOUSE_REGION* const pRegion, INT32 const reason
 		/* Can the character join this squad?  If already in it, accept that as a
 			* legal choice and exit menu */
 		SOLDIERTYPE& s = *GetSelectedAssignSoldier(FALSE);
+		wchar_t buf[128] = { L'\0' };
 		switch (CanCharacterSquad(s, value))
 		{
 			case CHARACTER_CAN_JOIN_SQUAD: // able to add, do it
@@ -4628,8 +4636,8 @@ static void SquadMenuBtnCallback(MOUSE_REGION* const pRegion, INT32 const reason
 				AddCharacterToSquad(&s, value);
 				if (exiting_helicopter) SetSoldierExitHelicopterInsertionData(&s); // XXX TODO001D
 				MakeSoldiersTacticalAnimationReflectAssignment(&s);
-				/* FALLTHROUGH */
 			}
+				// fallthrough
 			case CHARACTER_CANT_JOIN_SQUAD_ALREADY_IN_IT:
 				// Stop displaying, leave
 				fShowAssignmentMenu      = FALSE;
@@ -4640,24 +4648,25 @@ static void SquadMenuBtnCallback(MOUSE_REGION* const pRegion, INT32 const reason
 				gfRenderPBInterface      = TRUE;
 				break;
 
-				wchar_t buf[128];
 			case CHARACTER_CANT_JOIN_SQUAD_SQUAD_MOVING:
 				swprintf(buf, lengthof(buf), pMapErrorString[36], s.name, pLongAssignmentStrings[value]);
-				goto show_error;
+				break;
 			case CHARACTER_CANT_JOIN_SQUAD_VEHICLE:
 				swprintf(buf, lengthof(buf), pMapErrorString[37], s.name);
-				goto show_error;
+				break;
 			case CHARACTER_CANT_JOIN_SQUAD_TOO_FAR:
 				swprintf(buf, lengthof(buf), pMapErrorString[20], s.name, pLongAssignmentStrings[value]);
-				goto show_error;
+				break;
 			case CHARACTER_CANT_JOIN_SQUAD_FULL:
 				swprintf(buf, lengthof(buf), pMapErrorString[19], s.name, pLongAssignmentStrings[value]);
-				goto show_error;
+				break;
 			default: // generic "you can't join this squad" msg
 				swprintf(buf, lengthof(buf), pMapErrorString[38], s.name, pLongAssignmentStrings[value]);
-show_error:
-				DoScreenIndependantMessageBox(buf, MSG_BOX_FLAG_OK, NULL);
 				break;
+		}
+		if (buf[0] != L'\0')
+		{
+			DoScreenIndependantMessageBox(buf, MSG_BOX_FLAG_OK, NULL);
 		}
 
 		SetAssignmentForList(value, 0);
@@ -6911,7 +6920,8 @@ void SetAssignmentForList(INT8 const bAssignment, INT8 const bParam)
 
 						// able to add, do it
 						AddCharacterToSquad(&s, bAssignment);
-						/* FALLTHROUGH */
+						fItWorked = TRUE;
+						break;
 					}
 
 					// if already in it, don't report that as an error

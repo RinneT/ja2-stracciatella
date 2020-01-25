@@ -37,7 +37,7 @@
 #include "ContentManager.h"
 #include "GameInstance.h"
 #include "WeaponModels.h"
-#include "slog/slog.h"
+#include "Logger.h"
 
 #define STEPS_FOR_BULLET_MOVE_TRAILS				10
 #define STEPS_FOR_BULLET_MOVE_SMALL_TRAILS			5
@@ -715,7 +715,7 @@ static INT32 LineOfSightTest(GridNo start_pos, FLOAT dStartZ, GridNo end_pos, FL
 	ddHorizAngle = atan2( dDeltaY, dDeltaX );
 
 	#ifdef LOS_DEBUG
-	memset( &gLOSTestResults, 0, sizeof( LOSResults ) );
+	gLOSTestResults = LOSResults{};
 	gLOSTestResults.fLOSTestPerformed = TRUE;
 	gLOSTestResults.iStartX = (INT32) dStartX;
 	gLOSTestResults.iStartY = (INT32) dStartY;
@@ -1945,13 +1945,13 @@ static BOOLEAN BulletHitMerc(BULLET* pBullet, STRUCTURE* pStructure, BOOLEAN fIn
 				// lucky bastard was facing away!
 			}
 			else if ((tgt.inv[HEAD1POS].usItem == NIGHTGOGGLES || tgt.inv[HEAD1POS].usItem == SUNGOGGLES ||
-				tgt.inv[HEAD1POS].usItem == GASMASK) && PreRandom(100) < tgt.inv[HEAD1POS].bStatus[0])
+				tgt.inv[HEAD1POS].usItem == GASMASK) && static_cast<INT8>(PreRandom(100)) < tgt.inv[HEAD1POS].bStatus[0])
 			{
 				// lucky bastard was wearing protective stuff
 				bHeadSlot = HEAD1POS;
 			}
 			else if ((tgt.inv[HEAD2POS].usItem == NIGHTGOGGLES || tgt.inv[HEAD2POS].usItem == SUNGOGGLES ||
-				tgt.inv[HEAD2POS].usItem == GASMASK) && PreRandom(100) < tgt.inv[HEAD2POS].bStatus[0])
+				tgt.inv[HEAD2POS].usItem == GASMASK) && static_cast<INT8>(PreRandom(100)) < tgt.inv[HEAD2POS].bStatus[0])
 			{
 				// lucky bastard was wearing protective stuff
 				bHeadSlot = HEAD2POS;
@@ -2373,7 +2373,7 @@ static INT32 CTGTHandleBulletStructureInteraction(BULLET* pBullet, STRUCTURE* pS
 {
 	// returns reduction in impact for summing in CTGT
 
-	INT32 iCurrImpact;
+	//INT32 iCurrImpact;
 	INT32 iImpactReduction;
 
 	if (pBullet->usFlags & BULLET_FLAG_KNIFE || pBullet->usFlags & BULLET_FLAG_MISSILE || pBullet->usFlags & BULLET_FLAG_FLAME || pBullet->usFlags & BULLET_FLAG_TANK_CANNON )
@@ -2400,7 +2400,7 @@ static INT32 CTGTHandleBulletStructureInteraction(BULLET* pBullet, STRUCTURE* pS
 	//   scratch at each collision with an obstacle
 	//   reduction due to range is 25% per "max range"
 	//iCurrImpact = BulletImpactReducedByRange( pBullet->iImpact, pBullet->iLoop, pBullet->iRange );
-	iCurrImpact = pBullet->iImpact;
+	//iCurrImpact = pBullet->iImpact;
 	// multiply impact reduction by 100 to retain fractions for a bit...
 	iImpactReduction = gubMaterialArmour[ pStructure->pDBStructureRef->pDBStructure->ubArmour ] * pStructure->pDBStructureRef->pDBStructure->ubDensity / 100;
 	iImpactReduction = StructureResistanceIncreasedByRange( iImpactReduction, pBullet->iRange, pBullet->iLoop );
@@ -2461,14 +2461,14 @@ static UINT8 CalcChanceToGetThrough(BULLET* pBullet)
 	FIXEDPT qWindowBottomHeight;
 	FIXEDPT qWindowTopHeight;
 
-	SLOGD(DEBUG_TAG_LOS, "Starting CalcChanceToGetThrough" );
+	SLOGD("Starting CalcChanceToGetThrough" );
 
 	do
 	{
 		// check a particular tile
 		// retrieve values from world for this particular tile
 		iGridNo = pBullet->iCurrTileX + pBullet->iCurrTileY * WORLD_COLS;
-		SLOGD(DEBUG_TAG_LOS, "CTGT now at %ld", iGridNo);
+		SLOGD("CTGT now at %ld", iGridNo);
 		pMapElement = &(gpWorldLevelData[ iGridNo ] );
 		qLandHeight = INT32_TO_FIXEDPT( CONVERT_PIXELS_TO_HEIGHTUNITS( pMapElement->sHeight ) );
 		qWallHeight = gqStandardWallHeight + qLandHeight;
@@ -2710,7 +2710,7 @@ static UINT8 CalcChanceToGetThrough(BULLET* pBullet)
 				pBullet->bLOSIndexX = FIXEDPT_TO_LOS_INDEX( pBullet->qCurrX );
 				pBullet->bLOSIndexY = FIXEDPT_TO_LOS_INDEX( pBullet->qCurrY );
 
-				SLOGD(DEBUG_TAG_LOS, "CTGT at %ld %ld after traversing empty tile",
+				SLOGD("CTGT at %ld %ld after traversing empty tile",
 					pBullet->bLOSIndexX, pBullet->bLOSIndexY);
 			}
 			else
@@ -2824,7 +2824,7 @@ static UINT8 CalcChanceToGetThrough(BULLET* pBullet)
 				}
 				while( (pBullet->bLOSIndexX == bOldLOSIndexX) && (pBullet->bLOSIndexY == bOldLOSIndexY) && (pBullet->iCurrCubesZ == iOldCubesZ));
 
-				SLOGD(DEBUG_TAG_LOS, "CTGT at %ld %ld %ld after moving in nonempty tile from %ld %ld %ld",
+				SLOGD("CTGT at %ld %ld %ld after moving in nonempty tile from %ld %ld %ld",
 					pBullet->bLOSIndexX, pBullet->bLOSIndexY, pBullet->iCurrCubesZ,
 					bOldLOSIndexX, bOldLOSIndexY, iOldCubesZ);
 				pBullet->iCurrTileX = FIXEDPT_TO_INT32( pBullet->qCurrX ) / CELL_X_SIZE;
@@ -3353,7 +3353,7 @@ INT8 FireBulletGivenTarget(SOLDIERTYPE* const pFirer, const FLOAT dEndX, const F
 		BULLET* const pBullet = CreateBullet(pFirer, fFake, usBulletFlags);
 		if (pBullet == NULL)
 		{
-			SLOGW(DEBUG_TAG_LOS, "Failed to create bullet");
+			SLOGW("Failed to create bullet");
 			return FALSE;
 		}
 		pBullet->sHitBy	= sHitBy;
@@ -3465,12 +3465,6 @@ INT8 FireBulletGivenTarget(SOLDIERTYPE* const pFirer, const FLOAT dEndX, const F
 		}
 		else
 		{
-			if (ubLoop + 1 > pFirer->bBulletsLeft)
-			{
-				// this is an error!!
-				// FIXME
-				ubLoop = ubLoop;
-			}
 			FireBullet(pBullet, FALSE);
 		}
 	}
@@ -4175,7 +4169,7 @@ void MoveBullet(BULLET* const pBullet)
 												RemoveBullet(pBullet);
 
 												CorpseHit( (INT16)pBullet->sGridNo, pStructure->usStructureID );
-												SLOGD(DEBUG_TAG_LOS, "Reducing attacker busy count..., CORPSE HIT");
+												SLOGD("Reducing attacker busy count..., CORPSE HIT");
 
 												FreeUpAttacker(pBullet->pFirer);
 												return;
@@ -4318,8 +4312,8 @@ INT32 CheckForCollision(FLOAT dX, FLOAT dY, FLOAT dZ, FLOAT dDeltaX, FLOAT dDelt
 	STRUCTURE * pStructure, *pTempStructure;
 
 	SOLDIERTYPE * pTarget;
-	FLOAT dTargetX;
-	FLOAT dTargetY;
+	//FLOAT dTargetX;
+	//FLOAT dTargetY;
 	FLOAT dTargetZMin;
 	FLOAT dTargetZMax;
 
@@ -4373,8 +4367,8 @@ INT32 CheckForCollision(FLOAT dX, FLOAT dY, FLOAT dZ, FLOAT dDeltaX, FLOAT dDelt
 	{
 		// a merc! that isn't us :-)
 		pTarget = pMapElement->pMercHead->pSoldier;
-		dTargetX = pTarget->dXPos;
-		dTargetY = pTarget->dYPos;
+		//dTargetX = pTarget->dXPos;
+		//dTargetY = pTarget->dYPos;
 		dTargetZMin = 0.0f;
 		CalculateSoldierZPos( pTarget, HEIGHT, &dTargetZMax );
 		if (pTarget->bLevel > 0)

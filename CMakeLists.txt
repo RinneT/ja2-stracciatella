@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 3.1)
 
 ## Some macros
 
@@ -48,19 +48,40 @@ option(WITH_UNITTESTS "Build with unittests" ON)
 option(WITH_FIXMES "Build with fixme messages" OFF)
 option(WITH_MAEMO "Build with right click mapped to F4 (menu button)" OFF)
 option(BUILD_LAUNCHER "Build the ja2 launcher application" ON)
+option(WITH_EDITOR_SLF "Include the latest free editor.slf" OFF)
+set(WITH_CUSTOM_LOCALE "" CACHE STRING "Set a custom locale at the start, leave empty to disable")
 
-set(EXTERNAL_PROJECT_CMAKE_ARGS
-    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    -DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}
-    -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-    -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-    -DCMAKE_RC_COMPILER=${CMAKE_RC_COMPILER}
-    -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=${CMAKE_FIND_ROOT_PATH_MODE_PROGRAM}
-    -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=${CMAKE_FIND_ROOT_PATH_MODE_LIBRARY}
-    -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=${CMAKE_FIND_ROOT_PATH_MODE_INCLUDE}
-)
+if(MSVC)
+	foreach(_var
+		CMAKE_CXX_FLAGS_DEBUG
+		CMAKE_CXX_FLAGS_RELEASE
+		CMAKE_CXX_FLAGS_MINSIZEREL
+		CMAKE_CXX_FLAGS_RELWITHDEBINFO
+		CMAKE_C_FLAGS_DEBUG
+		CMAKE_C_FLAGS_RELEASE
+		CMAKE_C_FLAGS_MINSIZEREL
+		CMAKE_C_FLAGS_RELWITHDEBINFO
+	)
+		# force /MD runtime (future note: cmake 3.15 has CMAKE_MSVC_RUNTIME_LIBRARY)
+		string(REGEX REPLACE "/MDd|/MD|/MTd|/MT|/LDd|/LD" "/MD" _value "${${_var}}")
+		if(NOT ${_var} STREQUAL _value)
+			set_property(CACHE "${_var}" PROPERTY VALUE "${_value}")
+		endif()
+	endforeach()
+endif()
 
 ## Build
+
+if(MSVC)
+	# set the source and execution charset
+	add_compile_options("/utf-8")
+	# suppress the min and max macro definitions
+	add_definitions("-DNOMINMAX")
+endif()
+
+if(NOT "${WITH_CUSTOM_LOCALE}" STREQUAL "")
+    add_definitions("-DWITH_CUSTOM_LOCALE=\"${WITH_CUSTOM_LOCALE}\"")
+endif()
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
 
@@ -120,8 +141,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_definitions(-DENABLE_ASSERTS)
 endif()
 
-set(FLTK_LIBRARIES "")
-set(FLTK_INCLUDE_DIR "")
 if(BUILD_LAUNCHER)
     if (NOT LOCAL_FLTK_LIB)
         find_package(FLTK)
@@ -130,24 +149,25 @@ if(BUILD_LAUNCHER)
             set(BUILD_LAUNCHER OFF)
         endif()
     else()
+        set(FLTK_LIBRARIES "")
+        set(FLTK_INCLUDE_DIR "")
         add_subdirectory("dependencies/lib-fltk")
     endif()
 endif()
 message(STATUS "Fltk Libraries: ${FLTK_LIBRARIES}")
-
-include(./rust/ExternalProject.cmake)
 
 set(JA2_INCLUDES "")
 set(JA2_SOURCES "")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/src/externalized")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/src/game")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/src/sgp")
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/src/slog")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/dependencies/lib-smacker")
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/dependencies/lib-stracciatella")
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/dependencies/lib-string_theory")
 
 if(BUILD_LAUNCHER)
     set(LAUNCHER_INCLUDES ${FLTK_INCLUDE_DIR} ${STRACCIATELLA_INCLUDE_DIR})
-    set(LAUNCHER_SOURCES "")
+    set(LAUNCHER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/sgp/Logger.cc")
     add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/src/launcher")
 endif()
 
@@ -159,7 +179,6 @@ include_directories(
     ${SDL2_INCLUDE_DIR}
     ${STRACCIATELLA_INCLUDE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/lib-smacker/libsmacker
-    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/lib-utf8cpp/source
 )
 
 if(BUILD_LAUNCHER)
@@ -192,7 +211,11 @@ endif()
 
 set(ADDITIONAL_LIBS "")
 if (UNIX AND NOT MINGW)
-    set(ADDITIONAL_LIBS dl pthread)
+    if(${CMAKE_SYSTEM_NAME} MATCHES "OpenBSD")
+        set(ADDITIONAL_LIBS pthread)
+    else()
+        set(ADDITIONAL_LIBS dl pthread)
+    endif()
 elseif(MINGW)
     set(ADDITIONAL_LIBS ws2_32 shell32 advapi32 userenv gcc_eh pthread)
 elseif(MSVC)
@@ -200,17 +223,21 @@ elseif(MSVC)
 endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CFLAGS}")
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-missing-braces -Wno-unused-function")
+endif()
+
 add_executable(${JA2_BINARY} ${JA2_SOURCES})
-target_link_libraries(${JA2_BINARY} ${SDL2_LIBRARY} ${Boost_LIBRARIES} ${GTEST_LIBRARIES} slog smacker ${STRACCIATELLA_LIBRARIES} ${ADDITIONAL_LIBS})
-add_dependencies(${JA2_BINARY} libstracciatella)
+target_link_libraries(${JA2_BINARY} ${SDL2_LIBRARY} ${Boost_LIBRARIES} ${GTEST_LIBRARIES} smacker ${STRACCIATELLA_LIBRARIES} string_theory ${ADDITIONAL_LIBS})
+add_dependencies(${JA2_BINARY} stracciatella)
 if (LOCAL_GTEST_LIB)
     add_dependencies(${JA2_BINARY} gtest-internal)
 endif()
 
 if(BUILD_LAUNCHER)
     add_executable(${LAUNCHER_BINARY} ${LAUNCHER_SOURCES})
-    target_link_libraries(${LAUNCHER_BINARY} ${FLTK_LIBRARIES} slog ${STRACCIATELLA_LIBRARIES} ${ADDITIONAL_LIBS})
-    add_dependencies(${LAUNCHER_BINARY} libstracciatella)
+    target_link_libraries(${LAUNCHER_BINARY} ${FLTK_LIBRARIES} ${STRACCIATELLA_LIBRARIES} ${ADDITIONAL_LIBS})
+    add_dependencies(${LAUNCHER_BINARY} stracciatella)
     if (LOCAL_FLTK_LIB)
         add_dependencies(${LAUNCHER_BINARY} fltk-internal)
     endif()
@@ -226,6 +253,12 @@ copy_assets_dir_to_ja2_binary_after_build("externalized")
 copy_assets_dir_to_ja2_binary_after_build("unittests")
 copy_assets_dir_to_ja2_binary_after_build("mods")
 
+if(WITH_EDITOR_SLF)
+    set(EDITORSLF_FILE "${CMAKE_CURRENT_BINARY_DIR}/editor.slf")
+    find_package(EditorSlf REQUIRED)
+    add_custom_templated_target(download-editor-slf)
+    add_dependencies(${JA2_BINARY} download-editor-slf)
+endif()
 
 if (MSVC)
     string(REPLACE "SDL2main.lib" "SDL2.dll" SDL_DLL ${SDL2MAIN_LIBRARY})
@@ -243,7 +276,6 @@ if (APPLE)
             ${CMAKE_INSTALL_NAME_TOOL} -add_rpath "@executable_path"
             "$<TARGET_FILE:${LAUNCHER_BINARY}>")
 endif()
-
 
 ## Installing and Packaging
 
@@ -284,6 +316,17 @@ if(UNIX AND NOT MINGW AND NOT APPLE)
     endif()
 elseif(MINGW)
     set(PACKAGE_ARCH "win-mingw")
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(PACKAGE_ARCH "${PACKAGE_ARCH}64")
+    elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
+        set(PACKAGE_ARCH "${PACKAGE_ARCH}32")
+    endif()
+    # build environment:
+    if(MSYS)
+        set(PACKAGE_ARCH "${PACKAGE_ARCH}-msys2") # MSYS Makefiles, assuming msys2 shell
+    elseif(CMAKE_HOST_UNIX)
+        set(PACKAGE_ARCH "${PACKAGE_ARCH}-cross") # cross compiling
+    endif()
 elseif(MSVC)
     set(PACKAGE_ARCH "win-msvc")
     if("${CMAKE_GENERATOR}" MATCHES "(Win64|IA64)")
@@ -308,6 +351,9 @@ if (UNIX AND NOT MINGW AND NOT APPLE)
     endif()
     install(PROGRAMS "${CMAKE_BINARY_DIR}/lib-stracciatella/bin/ja2-resource-pack${CMAKE_EXECUTABLE_SUFFIX}" DESTINATION bin)
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/assets/externalized assets/mods assets/unittests DESTINATION share/ja2)
+    if(WITH_EDITOR_SLF)
+        install(FILES "${EDITORSLF_FILE}" DESTINATION share/ja2)
+    endif()
     install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/distr-files-linux/ja2-stracciatella.desktop DESTINATION share/applications)
     install(
         FILES ${CMAKE_CURRENT_SOURCE_DIR}/assets/icons/logo.svg
@@ -325,11 +371,13 @@ else()
     endif()
     install(PROGRAMS "${CMAKE_BINARY_DIR}/lib-stracciatella/bin/ja2-resource-pack${CMAKE_EXECUTABLE_SUFFIX}" DESTINATION .)
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/assets/externalized assets/mods assets/unittests DESTINATION .)
+    if(WITH_EDITOR_SLF)
+        install(FILES "${EDITORSLF_FILE}" DESTINATION .)
+    endif()
     install(FILES changes.md DESTINATION .)
 endif()
 
 if(MSVC OR MINGW)
-    set(CMAKE_INSTALL_DEBUG_LIBRARIES TRUE)
     set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION .)
     set(CMAKE_INSTALL_UCRT_LIBRARIES TRUE)
     include(InstallRequiredSystemLibraries)
@@ -345,9 +393,8 @@ if (MSVC)
 endif()
 
 if (MINGW)
-    file(GLOB WIN_MINGW_DIST_DLLS "${CMAKE_CURRENT_SOURCE_DIR}/assets/distr-files-win-mingw/*.dll")
-    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/lib-SDL2-2.0.8-mingw/i686-w64-mingw32/bin/SDL2.dll DESTINATION .)
-    install(FILES ${WIN_MINGW_DIST_DLLS} DESTINATION .)
+    configure_file("${CMAKE_SOURCE_DIR}/cmake/install-dlls-mingw.cmake.in" "${CMAKE_CURRENT_BINARY_DIR}/install-dlls-mingw.cmake" @ONLY)
+    install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/install-dlls-mingw.cmake")
 endif()
 
 if(APPLE)

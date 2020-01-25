@@ -68,11 +68,10 @@
 #include "Debug.h"
 #include "UILayout.h"
 #include "WeaponModels.h"
-#include "slog/slog.h"
 #include "Easings.h"
 #include "ContentManager.h"
 #include "GameInstance.h"
-#include "slog/slog.h"
+#include "Logger.h"
 
 //#define INVULNERABILITY
 
@@ -467,7 +466,7 @@ void EnterAutoResolveMode( UINT8 ubSectorX, UINT8 ubSectorY )
 			break;
 		default:
 			//shouldn't happen
-			SLOGE(DEBUG_TAG_AUTORESOLVE, "Autoresolving with entering enemy sector code %d -- illegal", gubEnemyEncounterCode );
+			SLOGE("Autoresolving with entering enemy sector code %d -- illegal", gubEnemyEncounterCode );
 			break;
 	}
 }
@@ -1585,7 +1584,7 @@ static void CreateAutoResolveInterface(void)
 		}
 		else
 		{
-			SLOGE(DEBUG_TAG_ASSERTS, "Attempting to illegally create a militia soldier.");
+			SLOGA("Attempting to illegally create a militia soldier.");
 			s   = 0;
 			idx = 0;
 		}
@@ -1785,7 +1784,7 @@ static void RemoveAutoResolveInterface(bool const delete_for_good)
 			case SOLDIER_CLASS_REG_MILITIA:   current_rank = REGULAR_MILITIA; break;
 			case SOLDIER_CLASS_ELITE_MILITIA: current_rank = ELITE_MILITIA;   break;
 			default:
-				SLOGE(DEBUG_TAG_AUTORESOLVE, "Removing autoresolve militia with invalid ubSoldierClass %d.", s.ubSoldierClass);
+				SLOGE("Removing autoresolve militia with invalid ubSoldierClass %d.", s.ubSoldierClass);
 				break;
 		}
 		if (delete_for_good)
@@ -1820,7 +1819,7 @@ static void RemoveAutoResolveInterface(bool const delete_for_good)
 			}
 		}
 		TacticalRemoveSoldier(s);
-		memset(&gpCivs[i], 0, sizeof(SOLDIERCELL));
+		gpCivs[i] = SOLDIERCELL{};
 	}
 
 	if (delete_for_good)
@@ -1846,7 +1845,7 @@ static void RemoveAutoResolveInterface(bool const delete_for_good)
 			 * 32. We basically cheat by eliminating the rest of them. */
 			if(NumEnemiesInSector(x , y))
 			{
-				SLOGI(DEBUG_TAG_AUTORESOLVE, "Eliminating remaining enemies after Autoresolve in (%d,%d)", x, y);
+				SLOGI("Eliminating remaining enemies after Autoresolve in (%d,%d)", x, y);
 				EliminateAllEnemies(x, y);
 			}
 		}
@@ -1862,7 +1861,7 @@ static void RemoveAutoResolveInterface(bool const delete_for_good)
 		SOLDIERCELL& slot = gpEnemies[i];
 		if (!slot.pSoldier) continue;
 		TacticalRemoveSoldier(*slot.pSoldier);
-		memset(&slot, 0, sizeof(slot));
+		slot = SOLDIERCELL{};
 	}
 
 	for (INT32 i = 0; i != NUM_AR_BUTTONS; ++i)
@@ -2230,8 +2229,10 @@ static void ResetAutoResolveInterface(void)
 	{
 		switch( PreRandom( 5 ) )
 		{
-			case 0:					if( gpAR->ubElites ) { gpAR->ubElites--; break; }
+			case 0:         if( gpAR->ubElites ) { gpAR->ubElites--; break; }
+			// fallthrough
 			case 1: case 2: if( gpAR->ubAdmins ) { gpAR->ubAdmins--; break; }
+			// fallthrough
 			case 3: case 4: if( gpAR->ubTroops ) { gpAR->ubTroops--; break; }
 		}
 	}
@@ -2578,7 +2579,7 @@ static void CreateTempPlayerMerc(void)
 	SOLDIERCREATE_STRUCT		MercCreateStruct;
 
 	//Init the merc create structure with basic information
-	memset( &MercCreateStruct, 0, sizeof( MercCreateStruct ) );
+	MercCreateStruct = SOLDIERCREATE_STRUCT{};
 	MercCreateStruct.bTeam									= OUR_TEAM;
 	MercCreateStruct.ubProfile							= GetUnusedMercProfileID();
 	MercCreateStruct.sSectorX								= gpAR->ubSectorX;
@@ -2912,7 +2913,7 @@ static SOLDIERCELL* ChooseTarget(SOLDIERCELL* pAttacker)
 		}
 		if( !IsBattleOver() )
 		{
-			SLOGE(DEBUG_TAG_ASSERTS, "Please send PRIOR save and screenshot of this message. iAvailableTargets %d, index %d, iRandom %d, defence %d. ",
+			SLOGA("Please send PRIOR save and screenshot of this message. iAvailableTargets %d, index %d, iRandom %d, defence %d. ",
 				iAvailableTargets, index, iRandom, gpAR->usPlayerDefence);
 		}
 	}
@@ -2941,7 +2942,7 @@ static SOLDIERCELL* ChooseTarget(SOLDIERCELL* pAttacker)
 			iAvailableTargets--;
 		}
 	}
-	SLOGE(DEBUG_TAG_ASSERTS, "Error in ChooseTarget logic for choosing enemy target." );
+	SLOGA("Error in ChooseTarget logic for choosing enemy target." );
 	return NULL;
 }
 
@@ -3836,7 +3837,7 @@ static void ProcessBattleFrame(void)
 				}
 			}
 			else
-				SLOGE(DEBUG_TAG_ASSERTS, "Logic error in ProcessBattleFrame()" );
+				SLOGA("Logic error in ProcessBattleFrame()" );
 			//Apply damage and play miss/hit sounds if delay between firing and hit has expired.
 			if( !(pAttacker->uiFlags & CELL_RETREATED ) )
 			{

@@ -14,8 +14,6 @@
 * Written by Derek Beland, April 14, 1997
 *
 ***************************************************************************************/
-#include <stdexcept>
-
 #include "Buffer.h"
 #include "HImage.h"
 #include "Overhead.h"
@@ -46,7 +44,11 @@
 
 #include "ContentManager.h"
 #include "GameInstance.h"
-#include "slog/slog.h"
+#include "Logger.h"
+
+#include <algorithm>
+#include <iterator>
+#include <stdexcept>
 
 #define MAX_LIGHT_TEMPLATES 32 // maximum number of light types
 
@@ -198,9 +200,14 @@ void LoadShadeTablesFromTextFile()
 				for( j = 0; j < 3; j++ )
 				{
 					char str[10];
-					fscanf( fp, "%s", str );
-					sscanf( str, "%d", &num );
-					gusShadeLevels[i][j] = (UINT16)num;
+					if (fscanf( fp, "%s", str ) == 1 && sscanf( str, "%d", &num ) == 1)
+					{
+						gusShadeLevels[i][j] = (UINT16)num;
+					}
+					else
+					{
+						gusShadeLevels[i][j] = 0;
+					}
 				}
 			}
 			fclose( fp );
@@ -223,10 +230,10 @@ void InitLightingSystem(void)
 	LoadShadeTablesFromTextFile();
 
 	// init all light lists
-	memset(g_light_templates, 0, sizeof(g_light_templates));
+	std::fill(std::begin(g_light_templates), std::end(g_light_templates), LightTemplate{});
 
 	// init all light sprites
-	memset(LightSprites, 0, sizeof(LightSprites));
+	std::fill(std::begin(LightSprites), std::end(LightSprites), LIGHT_SPRITE{});
 
 	LightLoad("TRANSLUC.LHT");
 }
@@ -235,7 +242,7 @@ void InitLightingSystem(void)
 // THIS MUST BE CALLED ONCE ALL SURFACE VIDEO OBJECTS HAVE BEEN LOADED!
 void SetDefaultWorldLightingColors(void)
 {
-	static const SGPPaletteEntry pPal = { 0, 0, 0 };
+	static const SGPPaletteEntry pPal = { 0, 0, 0, 0 };
 	LightSetColor(&pPal);
 }
 
@@ -275,7 +282,7 @@ void LightReset(void)
 	}
 
 	// init all light sprites
-	memset(LightSprites, 0, sizeof(LightSprites));
+	std::fill(std::begin(LightSprites), std::end(LightSprites), LIGHT_SPRITE{});
 
 	LightLoad("TRANSLUC.LHT");
 
@@ -360,12 +367,12 @@ static BOOLEAN LightTileBlocked(INT16 iSrcX, INT16 iSrcY, INT16 iX, INT16 iY)
 	usTileNo=MAPROWCOLTOPOS(iY, iX);
 	usSrcTileNo=MAPROWCOLTOPOS(iSrcY, iSrcX);
 
-	if ( usTileNo >= NOWHERE )
+	if ( usTileNo >= GRIDSIZE )
 	{
 		return( FALSE );
 	}
 
-	if ( usSrcTileNo >= NOWHERE )
+	if ( usSrcTileNo >= GRIDSIZE )
 	{
 		return( FALSE );
 	}
@@ -418,12 +425,12 @@ static BOOLEAN LightTileHasWall(INT16 iSrcX, INT16 iSrcY, INT16 iX, INT16 iY)
 	//	int i = 0;
 	//}
 
-	if ( usTileNo >= NOWHERE )
+	if ( usTileNo >= GRIDSIZE )
 	{
 		return( FALSE );
 	}
 
-	if ( usSrcTileNo >= NOWHERE )
+	if ( usSrcTileNo >= GRIDSIZE )
 	{
 		return( FALSE );
 	}
@@ -661,7 +668,7 @@ static BOOLEAN LightAddTile(const INT16 iSrcX, const INT16 iSrcY, const INT16 iX
 
 	uiTile= MAPROWCOLTOPOS( iY, iX );
 
-	if ( uiTile >= NOWHERE )
+	if ( uiTile >= GRIDSIZE )
 	{
 		return( FALSE );
 	}
@@ -796,7 +803,7 @@ static BOOLEAN LightSubtractTile(const INT16 iSrcX, const INT16 iSrcY, const INT
 
 	uiTile= MAPROWCOLTOPOS( iY, iX );
 
-	if ( uiTile >= NOWHERE )
+	if ( uiTile >= GRIDSIZE )
 	{
 		return( FALSE );
 	}
@@ -1089,7 +1096,7 @@ static BOOLEAN LightCastRay(LightTemplate* const t, const INT16 iStartX, const I
 	if((XDelta==0) && (YDelta==0))
 		return(FALSE);
 
-	SLOGD(DEBUG_TAG_LIGHTING, "Drawing (%d,%d) to (%d,%d)", iXPos, iYPos, iEndX, iEndY);
+	SLOGD("Drawing (%d,%d) to (%d,%d)", iXPos, iYPos, iEndX, iEndY);
 	LightAddNode(t, 32767, 32767, 32767, 32767, 0, LIGHT_NEW_RAY);
 	if (fInsertNodes) usCurNode = t->n_rays;
 	/* Special-case horizontal, vertical, and diagonal lines, for speed
@@ -1947,7 +1954,7 @@ try
 {
 	LIGHT_SPRITE* const l = LightSpriteGetFree();
 
-	memset(l, 0, sizeof(LIGHT_SPRITE));
+	*l = LIGHT_SPRITE{};
 	l->iX          = WORLD_COLS + 1;
 	l->iY          = WORLD_ROWS + 1;
 
@@ -2189,7 +2196,7 @@ const char* LightSpriteGetTypeName(const LIGHT_SPRITE* const l)
 
 TEST(Lighting, asserts)
 {
-	EXPECT_EQ(sizeof(LIGHT_NODE), 6);
+	EXPECT_EQ(sizeof(LIGHT_NODE), 6u);
 }
 
 #endif

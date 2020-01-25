@@ -41,7 +41,7 @@ void HandleDoorChangeFromGridNo(SOLDIERTYPE* const s, INT16 const grid_no, BOOLE
 	STRUCTURE* const structure = FindStructure(grid_no, STRUCTURE_ANYDOOR);
 	if (!structure)
 	{
-		SLOGE(DEBUG_TAG_INTERFACE, "Told to handle door that does not exist at %d.", grid_no);
+		SLOGE("Told to handle door that does not exist at %d.", grid_no);
 		return;
 	}
 
@@ -55,7 +55,7 @@ void HandleDoorChangeFromGridNo(SOLDIERTYPE* const s, INT16 const grid_no, BOOLE
 	DOOR_STATUS* const door_status = GetDoorStatus(grid_no);
 	if (!door_status)
 	{
-		SLOGE(DEBUG_TAG_INTERFACE, "Told to set door busy but can't get door status at %d!", grid_no);
+		SLOGE("Told to set door busy but can't get door status at %d!", grid_no);
 		return;
 	}
 
@@ -765,7 +765,6 @@ BOOLEAN HandleOpenableStruct( SOLDIERTYPE *pSoldier, INT16 sGridNo, STRUCTURE *p
 static BOOLEAN HandleDoorsOpenClose(SOLDIERTYPE* pSoldier, INT16 sGridNo, STRUCTURE* pStructure, BOOLEAN fNoAnimations)
 try
 {
-	LEVELNODE *pShadowNode;
 	INT32 cnt;
 	BOOLEAN fOpenedGraphic = FALSE;
 	BOOLEAN fDoAnimation = TRUE;
@@ -814,9 +813,6 @@ try
 			}
 		}
 	}
-
-
-	pShadowNode = gpWorldLevelData[ sGridNo ].pShadowHead;
 
 
 	// Check the graphic which is down!
@@ -877,7 +873,7 @@ try
 			ModifyDoorStatus( sGridNo, DONTSETDOORSTATUS, TRUE );
 
 			ANITILE_PARAMS AniParams;
-			memset(&AniParams, 0, sizeof(AniParams));
+			AniParams = ANITILE_PARAMS{};
 			AniParams.uiFlags         = ANITILE_DOOR | ANITILE_EXISTINGTILE | (fOpenedGraphic ? ANITILE_FORWARD : ANITILE_BACKWARD);
 			AniParams.ubLevelID       = ANI_STRUCT_LEVEL;
 			AniParams.sStartFrame     = pNode->sCurrentFrame;
@@ -887,17 +883,6 @@ try
 			AniParams.pGivenLevelNode = pNode;
 			CreateAnimationTile(&AniParams);
 		}
-
-		// SHADOW STUFF HERE
-		//if ( pShadowNode != NULL )
-		//{
-		//	pShadowNode->uiFlags |= LEVELNODE_ANIMATION;
-		//	pShadowNode->uiFlags |= LEVELNODE_ANIMATION_PLAYONCE;
-		//	pShadowNode->uiFlags |= LEVELNODE_ANIMATION_FORWARD;
-		//	if ( pShadowNode->uiFlags & LEVELNODE_ANIMATION_BACKWARD )
-		//		pShadowNode->uiFlags ^= LEVELNODE_ANIMATION_BACKWARD;
-		//	pShadowNode->sDelay		= INTTILE_DOOR_OPENSPEED;
-		//}
 
 		if ( fDoAnimation && pSoldier && pSoldier->ubDoorOpeningNoise)
 		{
@@ -997,7 +982,7 @@ try
 			}
 
 			ANITILE_PARAMS AniParams;
-			memset(&AniParams, 0, sizeof(AniParams));
+			AniParams = ANITILE_PARAMS{};
 			AniParams.uiFlags         = ANITILE_DOOR | ANITILE_EXISTINGTILE | (fOpenedGraphic ? ANITILE_BACKWARD : ANITILE_FORWARD);
 			AniParams.ubLevelID       = ANI_STRUCT_LEVEL;
 			AniParams.sStartFrame     = pNode->sCurrentFrame;
@@ -1010,16 +995,6 @@ try
 			AniParams.v.sound         = uiSoundID;
 			CreateAnimationTile( &AniParams );
 		}
-
-		//if ( pShadowNode != NULL )
-		//{
-		//	pShadowNode->uiFlags |= LEVELNODE_ANIMATION;
-		//	pShadowNode->uiFlags |= LEVELNODE_ANIMATION_PLAYONCE;
-		//	pShadowNode->uiFlags |= LEVELNODE_ANIMATION_BACKWARD;
-		//	if ( pShadowNode->uiFlags & LEVELNODE_ANIMATION_FORWARD )
-		//		pShadowNode->uiFlags ^= LEVELNODE_ANIMATION_FORWARD;
-		//	pShadowNode->sDelay		= INTTILE_DOOR_OPENSPEED;
-		//}
 
 	}
 

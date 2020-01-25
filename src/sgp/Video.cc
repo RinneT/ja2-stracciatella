@@ -1,7 +1,3 @@
-#include <algorithm>
-#include <ctime>
-#include <stdexcept>
-
 #include "Debug.h"
 #include "Fade_Screen.h"
 #include "FileMan.h"
@@ -17,9 +13,6 @@
 #include "VObject_Blitters.h"
 #include "VSurface.h"
 #include "Video.h"
-#include <errno.h>
-#include <fcntl.h>
-#include <stdarg.h>
 #include "UILayout.h"
 #include "PlatformIO.h"
 #include "Font.h"
@@ -28,7 +21,14 @@
 #include "ContentManager.h"
 #include "GameInstance.h"
 
-#include "slog/slog.h"
+#include "Logger.h"
+
+#include <algorithm>
+#include <ctime>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdarg.h>
+#include <stdexcept>
 
 #define BUFFER_READY      0x00
 #define BUFFER_DIRTY      0x02
@@ -132,7 +132,7 @@ static void GetRGBDistribution();
 
 void InitializeVideoManager(const VideoScaleQuality quality)
 {
-	SLOGD(DEBUG_TAG_VIDEO, "Initializing the video manager");
+	SLOGD("Initializing the video manager");
 	SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
 
 	ScaleQuality = quality;
@@ -172,7 +172,7 @@ void InitializeVideoManager(const VideoScaleQuality quality)
 	);
 
 	if (ScreenBuffer == NULL) {
-		SLOGE(DEBUG_TAG_VIDEO, "SDL_CreateRGBSurface for ScreenBuffer failed: %s\n", SDL_GetError());
+		SLOGE("SDL_CreateRGBSurface for ScreenBuffer failed: %s\n", SDL_GetError());
 	}
 
 
@@ -197,7 +197,7 @@ void InitializeVideoManager(const VideoScaleQuality quality)
 					SCREEN_WIDTH, SCREEN_HEIGHT);
 
 	if (ScreenTexture == NULL) {
-		SLOGE(DEBUG_TAG_VIDEO, "SDL_CreateTexture for ScreenTexture failed: %s\n", SDL_GetError());
+		SLOGE("SDL_CreateTexture for ScreenTexture failed: %s\n", SDL_GetError());
 	}
 
 	if (ScaleQuality == VideoScaleQuality::NEAR_PERFECT) {
@@ -210,7 +210,7 @@ void InitializeVideoManager(const VideoScaleQuality quality)
 			SCREEN_WIDTH * scale, SCREEN_HEIGHT * scale);
 
 		if (ScaledScreenTexture == NULL) {
-			SLOGE(DEBUG_TAG_VIDEO, "SDL_CreateTexture for ScaledScreenTexture failed: %s\n", SDL_GetError());
+			SLOGE("SDL_CreateTexture for ScaledScreenTexture failed: %s\n", SDL_GetError());
 		}
 	}
 
@@ -221,7 +221,7 @@ void InitializeVideoManager(const VideoScaleQuality quality)
 
 	if (FrameBuffer == NULL)
 	{
-		SLOGE(DEBUG_TAG_VIDEO, "SDL_CreateRGBSurface for FrameBuffer failed: %s\n", SDL_GetError());
+		SLOGE("SDL_CreateRGBSurface for FrameBuffer failed: %s\n", SDL_GetError());
 	}
 
 	MouseCursor = SDL_CreateRGBSurface(
@@ -232,7 +232,7 @@ void InitializeVideoManager(const VideoScaleQuality quality)
 
 	if (MouseCursor == NULL)
 	{
-		SLOGE(DEBUG_TAG_VIDEO, "SDL_CreateRGBSurface for MouseCursor failed: %s\n", SDL_GetError());
+		SLOGE("SDL_CreateRGBSurface for MouseCursor failed: %s\n", SDL_GetError());
 	}
 
 	SDL_ShowCursor(SDL_DISABLE);
@@ -252,7 +252,7 @@ void InitializeVideoManager(const VideoScaleQuality quality)
 
 void ShutdownVideoManager(void)
 {
-	SLOGD(DEBUG_TAG_VIDEO, "Shutting down the video manager");
+	SLOGD("Shutting down the video manager");
 	/* Toggle the state of the video manager to indicate to the refresh thread
 	 * that it needs to shut itself down */
 
@@ -463,7 +463,7 @@ static void ScrollJA2Background(INT16 sScrollXIncrement, INT16 sScrollYIncrement
 		UINT h = StripRegions[i].h;
 		for (UINT j = y; j < y + h; ++j)
 		{
-			memset(gpZBuffer + j * SCREEN_WIDTH + x, 0, w * sizeof(*gpZBuffer));
+			std::fill_n(gpZBuffer + j * SCREEN_WIDTH + x, w, 0);
 		}
 
 		RenderStaticWorldRect(x, y, x + w, y + h, TRUE);
@@ -888,7 +888,7 @@ void InitializeVideoSurfaceManager(void)
 
 void ShutdownVideoSurfaceManager(void)
 {
-	SLOGD(DEBUG_TAG_VIDEO, "Shutting down the Video Surface manager");
+	SLOGD("Shutting down the Video Surface manager");
 
 	// Delete primary viedeo surfaces
 	DeletePrimaryVideoSurfaces();

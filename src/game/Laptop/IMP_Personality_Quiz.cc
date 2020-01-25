@@ -16,6 +16,7 @@
 #include "Button_System.h"
 #include "Font_Control.h"
 
+#include <algorithm>
 
 static BUTTON_PICS* giIMPPersonalityQuizButtonImage[2];
 static GUIButtonRef giIMPPersonalityQuizButton[2];
@@ -67,7 +68,7 @@ void EnterIMPPersonalityQuiz( void )
 {
 
 	// void answers out the quiz
-	memset( &iQuizAnswerList, -1, sizeof( INT32 ) * MAX_NUMBER_OF_IMP_QUESTIONS );
+	std::fill_n(iQuizAnswerList, MAX_NUMBER_OF_IMP_QUESTIONS, -1);
 
 	// if we are entering for first time, reset
 	if( giCurrentPersonalityQuizQuestion == MAX_NUMBER_OF_IMP_QUESTIONS )
@@ -296,7 +297,7 @@ static void BtnQuizAnswerCallback(GUI_BUTTON*, INT32 reason);
 static void AddIMPPersonalityQuizAnswerButtons(INT32 iNumberOfButtons)
 {
 	// will add iNumberofbuttons to the answer button list
-	for (UINT32 i = 0; i < iNumberOfButtons; i++)
+	for (INT32 i = 0; i < iNumberOfButtons; i++)
 	{
 		INT32 XLoc = LAPTOP_SCREEN_UL_X + (i < 4 ? BTN_FIRST_COLUMN_X : BTN_SECOND_COLUMN_X);
 		INT32 YLoc = LAPTOP_SCREEN_WEB_UL_Y + 97 + i % 4 * 50;

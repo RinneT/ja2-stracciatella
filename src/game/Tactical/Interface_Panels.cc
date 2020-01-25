@@ -71,10 +71,13 @@
 #include "ContentManager.h"
 #include "GameInstance.h"
 #include "WeaponModels.h"
-#include "slog/slog.h"
+#include "Logger.h"
 
 #include "policy/GamePolicy.h"
 #include "HImage.h"
+
+#include <algorithm>
+#include <iterator>
 
 // DEFINES FOR VARIOUS PANELS
 #define SM_ITEMDESC_START_X			214
@@ -932,7 +935,7 @@ try
 }
 catch (...)
 {
-	SLOGE(DEBUG_TAG_INTERFACE, "Cannot create Interface button");
+	SLOGE("Cannot create Interface button");
 	throw;
 }
 
@@ -946,7 +949,7 @@ try
 }
 catch (...)
 {
-	SLOGE(DEBUG_TAG_INTERFACE, "Cannot create Interface button");
+	SLOGE("Cannot create Interface button");
 	throw;
 }
 
@@ -1002,7 +1005,7 @@ void CreateSMPanelButtons(void)
 	// Create buttons
 
 	// SET BUTTONS TO -1
-	memset( iSMPanelButtons, -1, sizeof( iSMPanelButtons ) );
+	std::fill(std::begin(iSMPanelButtons), std::end(iSMPanelButtons), GUIButtonRef::NoButton());
 
 	const INT32 dy = INV_INTERFACE_START_Y;
 
@@ -1546,7 +1549,6 @@ static void SMInvClickCallback(MOUSE_REGION* pRegion, INT32 iReason)
 	UINT16 usItemPrevInItemPointer;
 	BOOLEAN fNewItem = FALSE;
 	static BOOLEAN fRightDown = FALSE;
-	static BOOLEAN fLeftDown = FALSE;
 
 
 	uiHandPos = MSYS_GetRegionUserData( pRegion, 0 );
@@ -1567,15 +1569,8 @@ static void SMInvClickCallback(MOUSE_REGION* pRegion, INT32 iReason)
 	}
 
 
-	//if (iReason & MSYS_CALLBACK_REASON_LBUTTON_DWN )
-	//{
-	//	fLeftDown = TRUE;
-	//}
-	//else if (iReason & MSYS_CALLBACK_REASON_LBUTTON_UP && fLeftDown )
 	if (iReason & MSYS_CALLBACK_REASON_LBUTTON_DWN )
 	{
-		fLeftDown = FALSE;
-
 		// If we do not have an item in hand, start moving it
 		if ( gpItemPointer == NULL )
 		{
@@ -1733,7 +1728,7 @@ static void SMInvClickCallback(MOUSE_REGION* pRegion, INT32 iReason)
 						if( gpItemPointer == NULL )
 						{
 							// clean up
-							memset( &gMoveingItem, 0, sizeof( INVENTORY_IN_SLOT ) );
+							gMoveingItem = INVENTORY_IN_SLOT{};
 							SetSkiCursor( CURSOR_NORMAL );
 						}
 						else
@@ -1840,7 +1835,6 @@ static void SMInvClickCallback(MOUSE_REGION* pRegion, INT32 iReason)
 	else if (iReason & MSYS_CALLBACK_REASON_LOST_MOUSE )
 	{
 		fRightDown = FALSE;
-		fLeftDown = FALSE;
 	}
 
 }
@@ -2504,7 +2498,7 @@ try
 }
 catch (...)
 {
-	SLOGE(DEBUG_TAG_INTERFACE, "Cannot create Interface button");
+	SLOGE("Cannot create Interface button");
 	throw;
 }
 
@@ -3341,19 +3335,11 @@ void KeyRingSlotInvClickCallback( MOUSE_REGION * pRegion, INT32 iReason )
 	// Copyies of values
 	UINT16 usOldItemIndex;
 	static BOOLEAN fRightDown = FALSE;
-	static BOOLEAN fLeftDown = FALSE;
 
 	uiKeyRing = MSYS_GetRegionUserData( pRegion, 0 );
 
-	//if (iReason & MSYS_CALLBACK_REASON_LBUTTON_DWN )
-	//{
-	//	fLeftDown = TRUE;
-	//}
-	//else if (iReason & MSYS_CALLBACK_REASON_LBUTTON_UP && fLeftDown )
 	if (iReason & MSYS_CALLBACK_REASON_LBUTTON_DWN )
 	{
-		fLeftDown = FALSE;
-
 		//if we are in the shop keeper interface
 		if (guiCurrentScreen == SHOPKEEPER_SCREEN)
 		{
@@ -3362,11 +3348,11 @@ void KeyRingSlotInvClickCallback( MOUSE_REGION * pRegion, INT32 iReason )
 			if( gMoveingItem.sItemIndex == 0 )
 			{
 				//Delete the contents of the item cursor
-				memset( &gMoveingItem, 0, sizeof( INVENTORY_IN_SLOT ) );
+				gMoveingItem = INVENTORY_IN_SLOT{};
 			}
 			else
 			{
-				memset( &InvSlot, 0, sizeof( INVENTORY_IN_SLOT ) );
+				InvSlot = INVENTORY_IN_SLOT{};
 
 				// Return if empty
 				//if ( gpSMCurrentMerc->inv[ uiHandPos ].usItem == NOTHING )
@@ -3572,7 +3558,6 @@ void KeyRingSlotInvClickCallback( MOUSE_REGION * pRegion, INT32 iReason )
 	else if (iReason & MSYS_CALLBACK_REASON_LOST_MOUSE )
 	{
 		fRightDown = FALSE;
-		fLeftDown = FALSE;
 	}
 
 }
@@ -3690,7 +3675,7 @@ static void ConfirmationToDepositMoneyToPlayersAccount(MessageBoxReturnValue con
 		EndItemPointer( );
 		// remove contents of the moving item because object still is money and usable
 		// you could add endlessly money to your bank account if not reset properly
-		memset( &gMoveingItem, 0, sizeof( INVENTORY_IN_SLOT ) );
+		gMoveingItem = INVENTORY_IN_SLOT{};
 		SetSkiCursor( CURSOR_NORMAL );
 		// dirty shopkeeper
 		gubSkiDirtyLevel = SKI_DIRTY_LEVEL2;

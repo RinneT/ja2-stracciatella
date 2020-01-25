@@ -32,7 +32,7 @@
 #include "MagazineModel.h"
 #include "WeaponModels.h"
 
-#include "slog/slog.h"
+#include "Logger.h"
 
 INT16 TerrainActionPoints(const SOLDIERTYPE* const pSoldier, const INT16 sGridno, const INT8 bDir, const INT8 bLevel)
 {
@@ -101,7 +101,7 @@ INT16 TerrainActionPoints(const SOLDIERTYPE* const pSoldier, const INT16 sGridno
 			return( 0 );
 
 		default:
-			SLOGD(DEBUG_TAG_POINTS,
+			SLOGD(
 				"Calc AP: Unrecongnized MP type %d in %d, direction %d",
 				sSwitchValue, sGridno, bDir);
 			break;
@@ -307,7 +307,7 @@ INT16 ActionPointCost(const SOLDIERTYPE* const pSoldier, const INT16 sGridNo, co
 			default:
 
 				// Invalid movement mode
-				SLOGW(DEBUG_TAG_POINTS,
+				SLOGW(
 					"Invalid movement mode %d used in ActionPointCost",
 					usMovementMode);
 				sPoints = 1;
@@ -381,7 +381,7 @@ INT16 EstimateActionPointCost( SOLDIERTYPE *pSoldier, INT16 sGridNo, INT8 bDir, 
 			default:
 
 				// Invalid movement mode
-				SLOGW(DEBUG_TAG_POINTS,
+				SLOGW(
 					"Invalid movement mode %d used in EstimateActionPointCost",
 					usMovementMode);
 				sPoints = 1;
@@ -518,7 +518,7 @@ void DeductPoints( SOLDIERTYPE *pSoldier, INT16 sAPCost, INT16 sBPCost )
 
 	pSoldier->bActionPoints = (INT8)sNewAP;
 
-	SLOGD(DEBUG_TAG_POINTS, "Deduct Points (%d at %d) %d %d",
+	SLOGD("Deduct Points (%d at %d) %d %d",
 				pSoldier->ubID, pSoldier->sGridNo, sAPCost, sBPCost);
 
 	if ( AM_A_ROBOT( pSoldier ) )
@@ -833,7 +833,7 @@ static INT16 GetBreathPerAP(SOLDIERTYPE* pSoldier, UINT16 usAnimState)
 
 	if ( !fAnimTypeFound )
 	{
-		SLOGD(DEBUG_TAG_POINTS, "Unknown end-of-turn breath anim: %hs",
+		SLOGD("Unknown end-of-turn breath anim: %hs",
 			gAnimControl[usAnimState].zAnimStr);
 	}
 
@@ -1447,12 +1447,16 @@ INT8 GetAPsToAutoReload( SOLDIERTYPE * pSoldier )
 	if (GCM->getItem(pObj->usItem)->getItemClass() == IC_GUN || GCM->getItem(pObj->usItem)->getItemClass() == IC_LAUNCHER)
 	{
 		bSlot = FindAmmoToReload( pSoldier, HANDPOS, NO_SLOT );
-		if (bSlot != NO_SLOT)
+		if (bSlot == NO_SLOT)
 		{
-			// we would reload using this ammo!
-			bAPCost += GetAPsToReloadGunWithAmmo( pObj, &(pSoldier->inv[bSlot] ) );
+			// we would not reload
+			return( 0 );
 		}
 
+		// we would reload using this ammo!
+		bAPCost += GetAPsToReloadGunWithAmmo( pObj, &(pSoldier->inv[bSlot] ) );
+		// if we are valid for two-pistol shooting (reloading) and we have enough APs still
+		// then we would do a reload of both guns!
 		if ( IsValidSecondHandShotForReloadingPurposes( pSoldier ) )
 		{
 			pObj = &(pSoldier->inv[SECONDHANDPOS]);
@@ -1678,15 +1682,14 @@ INT16 MinAPsToThrow(SOLDIERTYPE const& s, GridNo gridno, bool const add_turning_
 	// Make sure the guy's actually got a throwable item in his hand
 	UINT16 const in_hand = s.inv[HANDPOS].usItem;
 	const ItemModel *item = GCM->getItem(in_hand);
-	// Gennady: This is a very strange piece of code.
-	//          Be very careful with it.
-	//          The added parenthesis is just to silence a compiler warning (https://github.com/ja2-stracciatella/ja2-stracciatella/issues/791),
-	//          it does not necessarily indicate desired behavior - it just conserves present behavior.
-	//          For more discussion around it, see https://github.com/ja2-stracciatella/ja2-stracciatella/pull/287.
-	if ((!item->getItemClass()) & IC_GRENADE)
+	if (!item)
 	{
-		SLOGI(DEBUG_TAG_POINTS, "MinAPsToThrow - Called when in-hand item is %s",
-					item->getInternalName().c_str());
+		SLOGW("MinAPsToThrow - in-hand item is missing");
+		return 0;
+	}
+	else if (!(item->getItemClass() & (IC_GRENADE | IC_THROWN))) // match MinAPsToAttack
+	{
+		SLOGW("MinAPsToThrow - in-hand item '%s' has unexpected item class 0x%x", item->getInternalName().c_str(), item->getItemClass());
 		return 0;
 	}
 

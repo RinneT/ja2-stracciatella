@@ -106,7 +106,7 @@ void InitializeMines( void )
 	{
 		pMineStatus = &(gMineStatus[ ubMineIndex ]);
 
-		memset( pMineStatus, 0, sizeof( *pMineStatus ) );
+		*pMineStatus = MINE_STATUS_TYPE{};
 
 		pMineStatus->ubMineType = gubMineTypes[ ubMineIndex ];
 		pMineStatus->uiMaxRemovalRate = guiMinimumMineProduction[ ubMineIndex ];
@@ -135,7 +135,7 @@ void InitializeMines( void )
 			ubMineProductionIncreases = 20;
 			break;
 		default:
-			SLOGE(DEBUG_TAG_ASSERTS, "Invalid Difficulty level");
+			SLOGA("Invalid Difficulty level");
 			return;
 	}
 
@@ -529,7 +529,7 @@ static INT32 MineAMine(INT8 bMineIndex)
 		if( iAmtExtracted > 0 )
 		{
 			// debug message
-			SLOGD(DEBUG_TAG_SMAP, "%ls - Mine income from %ls = $%d", WORLDTIMESTR, pTownNames[GetTownAssociatedWithMine(bMineIndex)], iAmtExtracted);
+			SLOGD("%ls - Mine income from %ls = $%d", WORLDTIMESTR, pTownNames[GetTownAssociatedWithMine(bMineIndex)], iAmtExtracted);
 
 			// if this is the first time this mine has produced income for the player in the game
 			if ( !gMineStatus[ bMineIndex ].fMineHasProducedForPlayer )
@@ -631,7 +631,7 @@ INT8 GetMineIndexForSector(UINT8 const sector)
 	for (size_t i = 0; i != lengthof(gMineLocation); ++i)
 	{
 		MINE_LOCATION_TYPE const& m = gMineLocation[i];
-		if (m.sector == sector) return i;
+		if (m.sector == sector) return static_cast<INT8>(i);
 	}
 	return -1;
 }
@@ -809,7 +809,7 @@ void IssueHeadMinerQuote(INT8 const mine_idx, HeadMinerQuote const quote_type)
 	MERCPROFILESTRUCT const& p = GetProfile(miner_data.usProfileId);
 	if (p.bLife < OKLIFE)
 	{
-		SLOGD(DEBUG_TAG_SMAP, "Head Miner #%ls can't talk (quote #%d)", p.zNickname, quote_type);
+		SLOGD("Head Miner #%ls can't talk (quote #%d)", p.zNickname, quote_type);
 		return;
 	}
 

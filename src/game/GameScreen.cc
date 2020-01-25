@@ -61,7 +61,7 @@
 #include "UILayout.h"
 #include "GameState.h"
 #include "EditScreen.h"
-#include "slog/slog.h"
+#include "Logger.h"
 
 #define ARE_IN_FADE_IN( )		( gfFadeIn || gfFadeInitialized )
 
@@ -508,7 +508,7 @@ ScreenID MainGameScreenHandle(void)
 	}
 	else if (gfIntendOnEnteringEditor && GameState::getInstance()->isEditorMode())
 	{
-		SLOGI(DEBUG_TAG_GAMESCREEN, "Aborting normal game mode and entering editor mode...");
+		SLOGI("Aborting normal game mode and entering editor mode...");
 		SetPendingNewScreen(NO_PENDING_SCREEN);
 		return EDIT_SCREEN;
 	}
@@ -772,19 +772,8 @@ void InitHelicopterEntranceByMercs( void )
 {
 	if( DidGameJustStart() )
 	{
-		AIR_RAID_DEFINITION	AirRaidDef;
-
 		// Update clock ahead from STARTING_TIME to make mercs arrive!
 		WarpGameTime( FIRST_ARRIVAL_DELAY, WARPTIME_PROCESS_EVENTS_NORMALLY );
-
-		AirRaidDef.sSectorX		= 9;
-		AirRaidDef.sSectorY		= 1;
-		AirRaidDef.sSectorZ		= 0;
-		AirRaidDef.bIntensity = 2;
-		AirRaidDef.uiFlags		=	AIR_RAID_BEGINNING_GAME;
-		AirRaidDef.ubNumMinsFromCurrentTime	= 1;
-
-	//	ScheduleAirRaid( &AirRaidDef );
 
 		gfTacticalDoHeliRun = TRUE;
 		gfFirstHeliRun			= TRUE;

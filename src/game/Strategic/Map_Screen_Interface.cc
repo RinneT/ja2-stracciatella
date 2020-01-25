@@ -69,6 +69,8 @@
 #include "Items.h"
 #include "UILayout.h"
 
+#include <algorithm>
+#include <iterator>
 
 // number of LINKED LISTS for sets of leave items (each slot holds an unlimited # of items)
 #define NUM_LEAVE_LIST_SLOTS 20
@@ -263,7 +265,7 @@ BOOLEAN gfAtLeastOneMercWasHired = FALSE;
 void InitalizeVehicleAndCharacterList( void )
 {
 	// will init the vehicle and character lists to zero
-	memset(&gCharactersList, 0, sizeof( gCharactersList ));
+	std::fill(std::begin(gCharactersList), std::end(gCharactersList), MapScreenCharacterSt{});
 }
 
 
@@ -1202,9 +1204,9 @@ static INT32 SetUpDropItemListForMerc(SOLDIERTYPE& s)
 
 	// Zero out profiles
 	MERCPROFILESTRUCT& p = GetProfile(s.ubProfile);
-	memset(p.bInvStatus, 0, sizeof(p.bInvStatus));
-	memset(p.bInvNumber, 0, sizeof(p.bInvNumber));
-	memset(p.inv,        0, sizeof(p.inv));
+	std::fill(std::begin(p.bInvStatus), std::end(p.bInvStatus), 0);
+	std::fill(std::begin(p.bInvNumber), std::end(p.bInvNumber), 0);
+	std::fill(std::begin(p.inv), std::end(p.inv), 0);
 
 	return slot;
 }
@@ -1777,12 +1779,7 @@ static void DisplayFastHelpRegions(FASTHELPREGION* pRegion, INT32 iSize)
 // show one region
 static void DisplayUserDefineHelpTextRegions(FASTHELPREGION* pRegion)
 {
-	UINT16 usFillColor;
 	INT32 iX,iY,iW,iH;
-
-	// grab the color for the background region
-	usFillColor = Get16BPPColor(FROMRGB(250, 240, 188));
-
 
 	iX = pRegion->iX;
 	iY = pRegion->iY;
@@ -1820,10 +1817,6 @@ static void DisplayUserDefineHelpTextRegions(FASTHELPREGION* pRegion)
 	}
 	FRAME_BUFFER->ShadowRect(iX + 2, iY + 2, iX + iW - 3, iY + iH - 3);
 	FRAME_BUFFER->ShadowRect(iX + 2, iY + 2, iX + iW - 3, iY + iH - 3);
-
-	// fillt he video surface areas
-	//ColorFillVideoSurfaceArea(FRAME_BUFFER, iX, iY, (iX + iW), (iY + iH), 0);
-	//ColorFillVideoSurfaceArea(FRAME_BUFFER, (iX + 1), (iY + 1), (iX + iW - 1), (iY + iH - 1), usFillColor);
 
 	iH = DisplayWrappedString(iX + 10, iY + 6, pRegion->iW, 0, FONT10ARIAL, FONT_BEIGE, pRegion->FastHelpText, FONT_NEARBLACK, MARK_DIRTY);
 
@@ -2752,7 +2745,7 @@ static void MoveMenuBtnCallback(MOUSE_REGION* pRegion, INT32 iReason)
 			}
 			else
 			{
-				SLOGE(DEBUG_TAG_ASSERTS, "MoveMenuBtnCallback: Invalid regionType %d, moveBoxLine %d", iRegionType, iMoveBoxLine);
+				SLOGA("MoveMenuBtnCallback: Invalid regionType %d, moveBoxLine %d", iRegionType, iMoveBoxLine);
 				return;
 			}
 
@@ -2887,7 +2880,7 @@ static void HandleMoveoutOfSectorMovementTroops(void)
 			{
 				if ( !AddCharacterToSquad( pSoldier, ( INT8 )( iSquadNumber ) ) )
 				{
-					SLOGE(DEBUG_TAG_ASSERTS, "HandleMoveoutOfSectorMovementTroops: AddCharacterToSquad %d failed, iCounter %d", iSquadNumber, iCounter);
+					SLOGA("HandleMoveoutOfSectorMovementTroops: AddCharacterToSquad %d failed, iCounter %d", iSquadNumber, iCounter);
 					// toggle whether he's going or not to try and recover somewhat gracefully
 					fSoldierIsMoving[ iCounter ] = !fSoldierIsMoving[ iCounter ];
 				}

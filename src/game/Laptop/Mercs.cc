@@ -708,7 +708,7 @@ UINT8 GetMercIDFromMERCArray(UINT8 ubMercID)
 	//else its an error
 	else
 	{
-		SLOGE(DEBUG_TAG_ASSERTS, "GetMercIDFromMercArray: invalid MercID");
+		SLOGA("GetMercIDFromMercArray: invalid MercID");
 		return( TRUE );
 	}
 }
@@ -886,10 +886,11 @@ static void HandleTalkingSpeck(void)
 				gsSpeckDialogueTextPopUp[0] = '\0';
 
 				//Start speck talking
-				if( gusMercVideoSpeckSpeech != MERC_VIDEO_SPECK_SPEECH_NOT_TALKING || 	gusMercVideoSpeckSpeech != MERC_VIDEO_SPECK_HAS_TO_TALK_BUT_QUOTE_NOT_CHOSEN_YET )
-					StartSpeckTalking( gusMercVideoSpeckSpeech );
+				if( !StartSpeckTalking( gusMercVideoSpeckSpeech ) )
+				{
+					gusMercVideoSpeckSpeech = MERC_VIDEO_SPECK_SPEECH_NOT_TALKING;
+				}
 
-				gusMercVideoSpeckSpeech = MERC_VIDEO_SPECK_SPEECH_NOT_TALKING;
 				gubCurrentMercVideoMode = MERC_VIDEO_VIDEO_MODE;
 			}
 			break;
@@ -1184,7 +1185,7 @@ static BOOLEAN GetSpeckConditionalOpening(BOOLEAN fJustEnteredScreen)
 						StartSpeckTalking( SPECK_QUOTE_ALTERNATE_OPENING_TAG_ON_AFTER_OTHER_TAGS_4 );
 						break;
 					default:
-						SLOGE(DEBUG_TAG_ASSERTS, "GetSpeckConditionalOpening: Problem with random");
+						SLOGA("GetSpeckConditionalOpening: Problem with random");
 				}
 			}
 		}
@@ -1222,7 +1223,7 @@ static BOOLEAN GetSpeckConditionalOpening(BOOLEAN fJustEnteredScreen)
 		}
 
 		//loop through all the mercs and see if any are dead and the quote is not said
-		for(ubCnt=MERC_FIRST_MERC ; ubCnt<MERC_LAST_MERC; ubCnt++ )
+		for(ubCnt=MERC_FIRST_MERC ; ubCnt<=MERC_LAST_MERC; ubCnt++ )
 		{
 			MERCPROFILESTRUCT& p = GetProfile(ubCnt);
 			if (!IsMercDead(p)) continue;

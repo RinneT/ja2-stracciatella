@@ -1,4 +1,3 @@
-#include <stdint.h>
 #include "Animation_Control.h"
 #include "Animation_Data.h"
 #include "Debug.h"
@@ -33,10 +32,13 @@
 #include "VObject_Blitters.h"
 #include "VSurface.h"
 #include "WCheck.h"
-#include <math.h>
 #include "UILayout.h"
 #include "GameState.h"
-#include "slog/slog.h"
+#include "Logger.h"
+
+#include <algorithm>
+#include <math.h>
+#include <stdint.h>
 
 UINT16* gpZBuffer = NULL;
 UINT16  gZBufferPitch = 0;
@@ -60,7 +62,6 @@ enum RenderTilesFlags
 	TILES_MARKED                    = 0x10000000,
 	TILES_OBSCURED                  = 0x01000000
 };
-ENUM_BITSET(RenderTilesFlags)
 
 
 #define MAX_RENDERED_ITEMS 2
@@ -1623,7 +1624,7 @@ static void ScrollBackground(INT16 sScrollXIncrement, INT16 sScrollYIncrement)
 	if (!gfDoVideoScroll)
 	{
 		// Clear z-buffer
-		memset(gpZBuffer, LAND_Z_LEVEL, gsVIEWPORT_END_Y * SCREEN_WIDTH * 2);
+		std::fill_n(gpZBuffer, gsVIEWPORT_END_Y * SCREEN_WIDTH, LAND_Z_LEVEL);
 
 		RenderStaticWorldRect(gsVIEWPORT_START_X, gsVIEWPORT_START_Y, gsVIEWPORT_END_X, gsVIEWPORT_END_Y, FALSE);
 
@@ -1847,7 +1848,7 @@ static void RenderStaticWorld(void)
 	CalcRenderParameters(gsVIEWPORT_START_X, gsVIEWPORT_START_Y, gsVIEWPORT_END_X, gsVIEWPORT_END_Y);
 
 	// Clear z-buffer
-	memset(gpZBuffer, LAND_Z_LEVEL, gsVIEWPORT_END_Y * SCREEN_WIDTH * 2);
+	std::fill_n(gpZBuffer, gsVIEWPORT_END_Y * SCREEN_WIDTH, LAND_Z_LEVEL);
 
 	FreeBackgroundRectType(BGND_FLAG_ANIMATED);
 	InvalidateBackgroundRects();
@@ -2193,12 +2194,10 @@ void ScrollWorld(void)
 
 void InitRenderParams(UINT8 ubRestrictionID)
 {
+	// FIXME incorrect use of CELL_X_SIZE/CELL_Y_SIZE and WORLD_ROWS/WORLD_COLS
+	//       it only works as intended because they have the same value as the counterpart
 	INT16 gTopLeftWorldLimitX;     // XXX HACK000E
 	INT16 gTopLeftWorldLimitY;     // XXX HACK000E
-	INT16 gTopRightWorldLimitX;    // XXX HACK000E
-	INT16 gTopRightWorldLimitY;    // XXX HACK000E
-	INT16 gBottomLeftWorldLimitX;  // XXX HACK000E
-	INT16 gBottomLeftWorldLimitY;  // XXX HACK000E
 	INT16 gBottomRightWorldLimitX; // XXX HACK000E
 	INT16 gBottomRightWorldLimitY; // XXX HACK000E
 	switch (ubRestrictionID)
@@ -2207,12 +2206,6 @@ void InitRenderParams(UINT8 ubRestrictionID)
 			gTopLeftWorldLimitX = CELL_X_SIZE;
 			gTopLeftWorldLimitY = CELL_X_SIZE * WORLD_ROWS / 2;
 
-			gTopRightWorldLimitX = CELL_Y_SIZE * WORLD_COLS / 2;
-			gTopRightWorldLimitY = CELL_X_SIZE;
-
-			gBottomLeftWorldLimitX = CELL_Y_SIZE * WORLD_COLS / 2;
-			gBottomLeftWorldLimitY = CELL_Y_SIZE * WORLD_ROWS;
-
 			gBottomRightWorldLimitX = CELL_Y_SIZE * WORLD_COLS;
 			gBottomRightWorldLimitY = CELL_X_SIZE * WORLD_ROWS / 2;
 			break;
@@ -2220,12 +2213,6 @@ void InitRenderParams(UINT8 ubRestrictionID)
 		case 1: // BAEMENT LEVEL 1
 			gTopLeftWorldLimitX = CELL_X_SIZE * WORLD_ROWS * 3 / 10;
 			gTopLeftWorldLimitY = CELL_X_SIZE * WORLD_ROWS     /  2;
-
-			gTopRightWorldLimitX = CELL_X_SIZE * WORLD_ROWS     /  2;
-			gTopRightWorldLimitY = CELL_X_SIZE * WORLD_COLS * 3 / 10;
-
-			gBottomLeftWorldLimitX = CELL_X_SIZE * WORLD_ROWS     /  2;
-			gBottomLeftWorldLimitY = CELL_X_SIZE * WORLD_COLS * 7 / 10;
 
 			gBottomRightWorldLimitX = CELL_X_SIZE * WORLD_ROWS * 7 / 10;
 			gBottomRightWorldLimitY = CELL_X_SIZE * WORLD_ROWS     /  2;
@@ -2246,7 +2233,7 @@ void InitRenderParams(UINT8 ubRestrictionID)
 	gsTopY += ROOF_LEVEL_HEIGHT;
 	gsCY  += ROOF_LEVEL_HEIGHT / 2;
 
-	SLOGD(DEBUG_TAG_RENDERWORLD, "World Screen Width %d Height %d", gsRightX - gsLeftX, gsBottomY - gsTopY);
+	SLOGD("World Screen Width %d Height %d", gsRightX - gsLeftX, gsBottomY - gsTopY);
 
 	// Determine scale factors
 	// First scale world screen coords for VIEWPORT ratio
@@ -2507,14 +2494,14 @@ static void Blt8BPPDataTo16BPPBufferTransZIncClip(UINT16* pBuffer, UINT32 uiDest
 
 	if (hSrcVObject->ppZStripInfo == NULL)
 	{
-		SLOGW(DEBUG_TAG_RENDERWORLD, "Missing Z-Strip info on multi-Z object");
+		SLOGW("Missing Z-Strip info on multi-Z object");
 		return;
 	}
 	// setup for the z-column blitting stuff
 	const ZStripInfo* const pZInfo = hSrcVObject->ppZStripInfo[usIndex];
 	if (pZInfo == NULL)
 	{
-		SLOGW(DEBUG_TAG_RENDERWORLD, "Missing Z-Strip info on multi-Z object");
+		SLOGW("Missing Z-Strip info on multi-Z object");
 		return;
 	}
 
@@ -2593,7 +2580,7 @@ static void Blt8BPPDataTo16BPPBufferTransZIncClip(UINT16* pBuffer, UINT32 uiDest
 			if (PxCount & 0x80)
 			{
 				PxCount &= 0x7F;
-				if (PxCount > LSCount)
+				if (PxCount > static_cast<UINT32>(LSCount))
 				{
 					PxCount -= LSCount;
 					LSCount = BlitLength;
@@ -2602,7 +2589,7 @@ static void Blt8BPPDataTo16BPPBufferTransZIncClip(UINT16* pBuffer, UINT32 uiDest
 			}
 			else
 			{
-				if (PxCount > LSCount)
+				if (PxCount > static_cast<UINT32>(LSCount))
 				{
 					SrcPtr += LSCount;
 					PxCount -= LSCount;
@@ -2621,7 +2608,7 @@ static void Blt8BPPDataTo16BPPBufferTransZIncClip(UINT16* pBuffer, UINT32 uiDest
 			{
 BlitTransparent: // skip transparent pixels
 				PxCount &= 0x7F;
-				if (PxCount > LSCount) PxCount = LSCount;
+				if (PxCount > static_cast<UINT32>(LSCount)) PxCount = LSCount;
 				LSCount -= PxCount;
 				DestPtr += 2 * PxCount;
 				ZPtr    += 2 * PxCount;
@@ -2652,7 +2639,7 @@ BlitTransparent: // skip transparent pixels
 			else
 			{
 BlitNonTransLoop: // blit non-transparent pixels
-				if (PxCount > LSCount)
+				if (PxCount > static_cast<UINT32>(LSCount))
 				{
 					Unblitted = PxCount - LSCount;
 					PxCount = LSCount;
@@ -2770,14 +2757,14 @@ static void Blt8BPPDataTo16BPPBufferTransZIncClipZSameZBurnsThrough(UINT16* pBuf
 
 	if (hSrcVObject->ppZStripInfo == NULL)
 	{
-		SLOGW(DEBUG_TAG_RENDERWORLD, "Missing Z-Strip info on multi-Z object");
+		SLOGW("Missing Z-Strip info on multi-Z object");
 		return;
 	}
 	// setup for the z-column blitting stuff
 	const ZStripInfo* const pZInfo = hSrcVObject->ppZStripInfo[usIndex];
 	if (pZInfo == NULL)
 	{
-		SLOGW(DEBUG_TAG_RENDERWORLD, "Missing Z-Strip info on multi-Z object");
+		SLOGW("Missing Z-Strip info on multi-Z object");
 		return;
 	}
 
@@ -2855,7 +2842,7 @@ static void Blt8BPPDataTo16BPPBufferTransZIncClipZSameZBurnsThrough(UINT16* pBuf
 			if (PxCount & 0x80)
 			{
 				PxCount &= 0x7F;
-				if (PxCount > LSCount)
+				if (PxCount > static_cast<UINT32>(LSCount))
 				{
 					PxCount -= LSCount;
 					LSCount = BlitLength;
@@ -2864,7 +2851,7 @@ static void Blt8BPPDataTo16BPPBufferTransZIncClipZSameZBurnsThrough(UINT16* pBuf
 			}
 			else
 			{
-				if (PxCount > LSCount)
+				if (PxCount > static_cast<UINT32>(LSCount))
 				{
 					SrcPtr += LSCount;
 					PxCount -= LSCount;
@@ -2883,7 +2870,7 @@ static void Blt8BPPDataTo16BPPBufferTransZIncClipZSameZBurnsThrough(UINT16* pBuf
 			{
 BlitTransparent: // skip transparent pixels
 				PxCount &= 0x7F;
-				if (PxCount > LSCount) PxCount = LSCount;
+				if (PxCount > static_cast<UINT32>(LSCount)) PxCount = LSCount;
 				LSCount -= PxCount;
 				DestPtr += 2 * PxCount;
 				ZPtr    += 2 * PxCount;
@@ -2914,7 +2901,7 @@ BlitTransparent: // skip transparent pixels
 			else
 			{
 BlitNonTransLoop: // blit non-transparent pixels
-				if (PxCount > LSCount)
+				if (PxCount > static_cast<UINT32>(LSCount))
 				{
 					Unblitted = PxCount - LSCount;
 					PxCount = LSCount;
@@ -3037,14 +3024,14 @@ static void Blt8BPPDataTo16BPPBufferTransZIncObscureClip(UINT16* pBuffer, UINT32
 
 	if (hSrcVObject->ppZStripInfo == NULL)
 	{
-		SLOGW(DEBUG_TAG_RENDERWORLD, "Missing Z-Strip info on multi-Z object");
+		SLOGW("Missing Z-Strip info on multi-Z object");
 		return;
 	}
 	// setup for the z-column blitting stuff
 	const ZStripInfo* const pZInfo = hSrcVObject->ppZStripInfo[usIndex];
 	if (pZInfo == NULL)
 	{
-		SLOGW(DEBUG_TAG_RENDERWORLD, "Missing Z-Strip info on multi-Z object");
+		SLOGW("Missing Z-Strip info on multi-Z object");
 		return;
 	}
 
@@ -3124,7 +3111,7 @@ static void Blt8BPPDataTo16BPPBufferTransZIncObscureClip(UINT16* pBuffer, UINT32
 			if (PxCount & 0x80)
 			{
 				PxCount &= 0x7F;
-				if (PxCount > LSCount)
+				if (PxCount > static_cast<UINT32>(LSCount))
 				{
 					PxCount -= LSCount;
 					LSCount = BlitLength;
@@ -3133,7 +3120,7 @@ static void Blt8BPPDataTo16BPPBufferTransZIncObscureClip(UINT16* pBuffer, UINT32
 			}
 			else
 			{
-				if (PxCount > LSCount)
+				if (PxCount > static_cast<UINT32>(LSCount))
 				{
 					SrcPtr += LSCount;
 					PxCount -= LSCount;
@@ -3152,7 +3139,7 @@ static void Blt8BPPDataTo16BPPBufferTransZIncObscureClip(UINT16* pBuffer, UINT32
 			{
 BlitTransparent: // skip transparent pixels
 				PxCount &= 0x7F;
-				if (PxCount > LSCount) PxCount = LSCount;
+				if (PxCount > static_cast<UINT32>(LSCount)) PxCount = LSCount;
 				LSCount -= PxCount;
 				DestPtr += 2 * PxCount;
 				ZPtr    += 2 * PxCount;
@@ -3183,7 +3170,7 @@ BlitTransparent: // skip transparent pixels
 			else
 			{
 BlitNonTransLoop: // blit non-transparent pixels
-				if (PxCount > LSCount)
+				if (PxCount > static_cast<UINT32>(LSCount))
 				{
 					Unblitted = PxCount - LSCount;
 					PxCount = LSCount;
@@ -3299,14 +3286,14 @@ static void Blt8BPPDataTo16BPPBufferTransZTransShadowIncObscureClip(UINT16* pBuf
 
 	if (hSrcVObject->ppZStripInfo == NULL)
 	{
-		SLOGW(DEBUG_TAG_RENDERWORLD, "Missing Z-Strip info on multi-Z object");
+		SLOGW("Missing Z-Strip info on multi-Z object");
 		return;
 	}
 	// setup for the z-column blitting stuff
 	const ZStripInfo* const pZInfo = hSrcVObject->ppZStripInfo[sZIndex];
 	if (pZInfo == NULL)
 	{
-		SLOGW(DEBUG_TAG_RENDERWORLD, "Missing Z-Strip info on multi-Z object");
+		SLOGW("Missing Z-Strip info on multi-Z object");
 		return;
 	}
 
@@ -3385,7 +3372,7 @@ static void Blt8BPPDataTo16BPPBufferTransZTransShadowIncObscureClip(UINT16* pBuf
 			if (PxCount & 0x80)
 			{
 				PxCount &= 0x7F;
-				if (PxCount > LSCount)
+				if (PxCount > static_cast<UINT32>(LSCount))
 				{
 					PxCount -= LSCount;
 					LSCount = BlitLength;
@@ -3394,7 +3381,7 @@ static void Blt8BPPDataTo16BPPBufferTransZTransShadowIncObscureClip(UINT16* pBuf
 			}
 			else
 			{
-				if (PxCount > LSCount)
+				if (PxCount > static_cast<UINT32>(LSCount))
 				{
 					SrcPtr += LSCount;
 					PxCount -= LSCount;
@@ -3413,7 +3400,7 @@ static void Blt8BPPDataTo16BPPBufferTransZTransShadowIncObscureClip(UINT16* pBuf
 			{
 BlitTransparent: // skip transparent pixels
 				PxCount &= 0x7F;
-				if (PxCount > LSCount) PxCount = LSCount;
+				if (PxCount > static_cast<UINT32>(LSCount)) PxCount = LSCount;
 				LSCount -= PxCount;
 				DestPtr += 2 * PxCount;
 				ZPtr    += 2 * PxCount;
@@ -3444,7 +3431,7 @@ BlitTransparent: // skip transparent pixels
 			else
 			{
 BlitNonTransLoop: // blit non-transparent pixels
-				if (PxCount > LSCount)
+				if (PxCount > static_cast<UINT32>(LSCount))
 				{
 					Unblitted = PxCount - LSCount;
 					PxCount = LSCount;
@@ -3565,14 +3552,14 @@ static void Blt8BPPDataTo16BPPBufferTransZTransShadowIncClip(UINT16* pBuffer, UI
 
 	if (hSrcVObject->ppZStripInfo == NULL)
 	{
-		SLOGW(DEBUG_TAG_RENDERWORLD, "Missing Z-Strip info on multi-Z object");
+		SLOGW("Missing Z-Strip info on multi-Z object");
 		return;
 	}
 	// setup for the z-column blitting stuff
 	const ZStripInfo* const pZInfo = hSrcVObject->ppZStripInfo[sZIndex];
 	if (pZInfo == NULL)
 	{
-		SLOGW(DEBUG_TAG_RENDERWORLD, "Missing Z-Strip info on multi-Z object");
+		SLOGW("Missing Z-Strip info on multi-Z object");
 		return;
 	}
 
@@ -3651,7 +3638,7 @@ static void Blt8BPPDataTo16BPPBufferTransZTransShadowIncClip(UINT16* pBuffer, UI
 			if (PxCount & 0x80)
 			{
 				PxCount &= 0x7F;
-				if (PxCount > LSCount)
+				if (PxCount > static_cast<UINT32>(LSCount))
 				{
 					PxCount -= LSCount;
 					LSCount = BlitLength;
@@ -3660,7 +3647,7 @@ static void Blt8BPPDataTo16BPPBufferTransZTransShadowIncClip(UINT16* pBuffer, UI
 			}
 			else
 			{
-				if (PxCount > LSCount)
+				if (PxCount > static_cast<UINT32>(LSCount))
 				{
 					SrcPtr += LSCount;
 					PxCount -= LSCount;
@@ -3679,7 +3666,7 @@ static void Blt8BPPDataTo16BPPBufferTransZTransShadowIncClip(UINT16* pBuffer, UI
 			{
 BlitTransparent: // skip transparent pixels
 				PxCount &= 0x7F;
-				if (PxCount > LSCount) PxCount = LSCount;
+				if (PxCount > static_cast<UINT32>(LSCount)) PxCount = LSCount;
 				LSCount -= PxCount;
 				DestPtr += 2 * PxCount;
 				ZPtr    += 2 * PxCount;
@@ -3710,7 +3697,7 @@ BlitTransparent: // skip transparent pixels
 			else
 			{
 BlitNonTransLoop: // blit non-transparent pixels
-				if (PxCount > LSCount)
+				if (PxCount > static_cast<UINT32>(LSCount))
 				{
 					Unblitted = PxCount - LSCount;
 					PxCount = LSCount;

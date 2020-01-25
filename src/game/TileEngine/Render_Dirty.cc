@@ -16,7 +16,7 @@
 
 #include <vector>
 
-#include "slog/slog.h"
+#include "Logger.h"
 
 #define BACKGROUND_BUFFERS 500
 
@@ -113,7 +113,7 @@ static BACKGROUND_SAVE* GetFreeBackgroundBuffer(void)
 		// out of back saves capacity
 		// let's add some more
 		const int increment = 100;
-		SLOGI(DEBUG_TAG_RENDERWORLD, "Increasing background slots to %d", gBackSaves.size() + increment);
+		SLOGD("Increasing background slots to %d", gBackSaves.size() + increment);
 		for(int i = 0; i < increment; i++) {
 			gBackSaves.push_back(new BACKGROUND_SAVE());
 		}
@@ -153,7 +153,7 @@ BACKGROUND_SAVE* RegisterBackgroundRect(BackgroundFlags const uiFlags, INT16 sLe
 	sBottom -= uiBottomSkip;
 
 	BACKGROUND_SAVE* const b = GetFreeBackgroundBuffer();
-	memset(b, 0, sizeof(*b));
+	*b = BACKGROUND_SAVE{};
 
 	const UINT32 uiBufSize = (sRight - sLeft) * (sBottom - sTop);
 	if (uiBufSize == 0) return NO_BGND_RECT;

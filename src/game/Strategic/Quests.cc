@@ -30,6 +30,8 @@
 #include "Items.h"
 #include "BobbyRMailOrder.h"
 
+#include <algorithm>
+#include <iterator>
 
 #define TESTQUESTS
 
@@ -1152,8 +1154,8 @@ void InternalEndQuest( UINT8 ubQuest, INT16 sSectorX, INT16 sSectorY, BOOLEAN fU
 
 void InitQuestEngine()
 {
-	memset(gubQuest, 0, sizeof(gubQuest));
-	memset(gubFact,  0, sizeof(gubFact));
+	std::fill(std::begin(gubQuest), std::end(gubQuest), 0);
+	std::fill(std::begin(gubFact), std::end(gubFact), 0);
 
 	// semi-hack to make the letter quest start right away
 	CheckForQuests( 1 );
@@ -1179,7 +1181,7 @@ void CheckForQuests( UINT32 uiDay )
 {
 	// This function gets called at 8:00 AM time of the day
 
-	SLOGD(DEBUG_TAG_QUESTS, "Checking For Quests, Day %d", uiDay );
+	SLOGD("Checking For Quests, Day %d", uiDay );
 
 	// -------------------------------------------------------------------------------
 	// QUEST 0 : DELIVER LETTER
@@ -1190,7 +1192,7 @@ void CheckForQuests( UINT32 uiDay )
 	{
 		AddHistoryToPlayersLog(HISTORY_ACCEPTED_ASSIGNMENT_FROM_ENRICO, 0, GetWorldTotalMin(), -1, -1);
 		StartQuest( QUEST_DELIVER_LETTER, -1, -1 );
-		SLOGD(DEBUG_TAG_QUESTS, "Started DELIVER LETTER quest");
+		SLOGD("Started DELIVER LETTER quest");
 	}
 
 	// This quest gets turned OFF through conversation with Miguel - when user hands

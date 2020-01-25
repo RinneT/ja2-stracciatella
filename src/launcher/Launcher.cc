@@ -1,14 +1,17 @@
+#include <algorithm>
 #include <string>
+#include <vector>
 #include "FL/Fl_Native_File_Chooser.H"
 #include <FL/Fl_PNG_Image.H>
 #include <FL/fl_ask.H>
 #include "logo32.png.h"
-#include "slog/slog.h"
+#include "Logger.h"
 #include "RustInterface.h"
+#include "Types.h"
+#include "GameRes.h"
+#include "Video.h"
 
 #include "Launcher.h"
-
-#define LAUNCHER_TOPIC DEBUG_TAG_LAUNCHER
 
 #define RESOLUTION_SEPARATOR "x"
 
@@ -39,18 +42,58 @@ const std::vector<VideoScaleQuality> scalingModes = {
 	VideoScaleQuality::PERFECT,
 };
 
-Launcher::Launcher(const std::string exePath, EngineOptions* engine_options) : StracciatellaLauncher() {
-	this->exePath = exePath;
-	this->engine_options = engine_options;
+Launcher::Launcher(int argc, char* argv[]) : StracciatellaLauncher() {
+	this->argc = argc;
+	this->argv = argv;
+}
+
+Launcher::~Launcher() {
+}
+
+void Launcher::loadJa2Json() {
+	RustPointer<char> rustExePath(findJa2Executable(argv[0]));
+	this->exePath = std::string(rustExePath.get());
+
+	this->engine_options.reset(EngineOptions_create(argv, argc));
+
+	if (this->engine_options == NULL) {
+		exit(EXIT_FAILURE);
+	}
+	if (EngineOptions_shouldShowHelp(this->engine_options.get())) {
+		exit(EXIT_SUCCESS);
+	}
 }
 
 void Launcher::show() {
-	browseJa2DirectoryButton->callback((Fl_Callback *) openDataDirectorySelector, (void *) (this));
-	predefinedResolutionButton->callback( (Fl_Callback*)enablePredefinedResolutionSelection, (void*)(this) );
-	customResolutionButton->callback( (Fl_Callback*)enableCustomResolutionSelection, (void*)(this) );
-	playButton->callback( (Fl_Callback*)startGame, (void*)(this) );
 	editorButton->callback( (Fl_Callback*)startEditor, (void*)(this) );
+	playButton->callback( (Fl_Callback*)startGame, (void*)(this) );
+	gameDirectoryInput->callback( (Fl_Callback*)widgetChanged, (void*)(this) );
+	browseJa2DirectoryButton->callback((Fl_Callback *) openGameDirectorySelector, (void *) (this));
+	gameVersionInput->callback( (Fl_Callback*)widgetChanged, (void*)(this) );
 	guessVersionButton->callback( (Fl_Callback*)guessVersion, (void*)(this) );
+	scalingModeChoice->callback( (Fl_Callback*)widgetChanged, (void*)(this) );
+	resolutionXInput->callback( (Fl_Callback*)widgetChanged, (void*)(this) );
+	resolutionYInput->callback( (Fl_Callback*)widgetChanged, (void*)(this) );
+	RustPointer<char> game_json_path(findPathFromAssetsDir("externalized/game.json", true, true));
+	if (game_json_path) {
+		gameSettingsOutput->value(game_json_path.get());
+	} else {
+		gameSettingsOutput->value("failed to find path to game.json");
+	}
+	fullscreenCheckbox->callback( (Fl_Callback*)widgetChanged, (void*)(this) );
+	playSoundsCheckbox->callback( (Fl_Callback*)widgetChanged, (void*)(this) );
+	RustPointer<char> ja2_json_path(findPathFromStracciatellaHome("ja2.json", false, true));
+	if (ja2_json_path) {
+		ja2JsonPathOutput->value(ja2_json_path.get());
+	} else {
+		ja2JsonPathOutput->value("failed to find path to ja2.json");
+	}
+	ja2JsonReloadBtn->callback( (Fl_Callback*)reloadJa2Json, (void*)(this) );
+	ja2JsonSaveBtn->callback( (Fl_Callback*)saveJa2Json, (void*)(this) );
+	addModMenuButton->callback( (Fl_Callback*)addMod, (void*)(this) );
+	moveDownModsButton->callback( (Fl_Callback*)moveDownMods, (void*)(this) );
+	moveUpModsButton->callback( (Fl_Callback*)moveUpMods, (void*)(this) );
+	removeModsButton->callback( (Fl_Callback*)removeMods, (void*)(this) );
 
 	populateChoices();
 	initializeInputsFromDefaults();
@@ -61,13 +104,18 @@ void Launcher::show() {
 }
 
 void Launcher::initializeInputsFromDefaults() {
-	char* rustResRootPath = get_vanilla_data_dir(this->engine_options);
-	dataDirectoryInput->value(rustResRootPath);
-	free_rust_string(rustResRootPath);
+	RustPointer<char> rustResRootPath(EngineOptions_getVanillaGameDir(this->engine_options.get()));
+	gameDirectoryInput->value(rustResRootPath.get());
 
-	auto rustResVersion = get_resource_version(this->engine_options);
-	auto resourceVersionIndex = 0;
-	for (auto version : predefinedVersions) {
+	uint32_t n = EngineOptions_getModsLength(this->engine_options.get());
+	modsCheckBrowser->clear();
+	for (uint32_t i = 0; i < n; ++i) {
+		modsCheckBrowser->add(EngineOptions_getMod(this->engine_options.get(), i));
+	}
+
+	GameVersion rustResVersion = EngineOptions_getResourceVersion(this->engine_options.get());
+	int resourceVersionIndex = 0;
+	for (GameVersion version : predefinedVersions) {
 		if (version == rustResVersion) {
 			break;
 		}
@@ -75,33 +123,15 @@ void Launcher::initializeInputsFromDefaults() {
 	}
 	gameVersionInput->value(resourceVersionIndex);
 
-	int x = get_resolution_x(this->engine_options);
-	int y = get_resolution_y(this->engine_options);
-	std::pair<int, int> currentResolution = std::make_pair(x, y);
+	int x = EngineOptions_getResolutionX(this->engine_options.get());
+	int y = EngineOptions_getResolutionY(this->engine_options.get());
 
-	char resolutionString[255];
-	sprintf(resolutionString, "%dx%d", x, y);
+	resolutionXInput->value(x);
+	resolutionYInput->value(y);
 
-	std::pair<int, int>* predefinedResolution = NULL;
-	for (auto res : predefinedResolutions) {
-		if (res == currentResolution) {
-			predefinedResolution = &res;
-		}
-	}
-
-	customResolutionXInput->value(x);
-	customResolutionYInput->value(y);
-	if (predefinedResolution != NULL) {
-		predefinedResolutionInput->value(resolutionString);
-		enablePredefinedResolutions();
-	} else {
-		predefinedResolutionInput->value(defaultResolution);
-		enableCustomResolutions();
-	}
-
-	VideoScaleQuality quality = get_scaling_quality(this->engine_options);
-	auto scalingModeIndex = 0;
-	for (auto scalingMode : scalingModes) {
+	VideoScaleQuality quality = EngineOptions_getScalingQuality(this->engine_options.get());
+	int scalingModeIndex = 0;
+	for (VideoScaleQuality scalingMode : scalingModes) {
 		if (scalingMode == quality) {
 			break;
 		}
@@ -109,88 +139,75 @@ void Launcher::initializeInputsFromDefaults() {
 	}
 	this->scalingModeChoice->value(scalingModeIndex);
 
-	fullscreenCheckbox->value(should_start_in_fullscreen(this->engine_options) ? 1 : 0);
-	playSoundsCheckbox->value(should_start_without_sound(this->engine_options) ? 0 : 1);
+	fullscreenCheckbox->value(EngineOptions_shouldStartInFullscreen(this->engine_options.get()) ? 1 : 0);
+	playSoundsCheckbox->value(EngineOptions_shouldStartWithoutSound(this->engine_options.get()) ? 0 : 1);
+	update(false, nullptr);
 }
 
 int Launcher::writeJsonFile() {
-	set_start_in_fullscreen(this->engine_options, fullscreenCheckbox->value());
-	set_start_without_sound(this->engine_options, !playSoundsCheckbox->value());
+	EngineOptions_setStartInFullscreen(this->engine_options.get(), fullscreenCheckbox->value());
+	EngineOptions_setStartWithoutSound(this->engine_options.get(), !playSoundsCheckbox->value());
 
-	set_vanilla_data_dir(this->engine_options, dataDirectoryInput->value());
+	EngineOptions_setVanillaGameDir(this->engine_options.get(), gameDirectoryInput->value());
 
-	if (customResolutionButton->value()) {
-		set_resolution(this->engine_options,
-						(int)customResolutionXInput->value(),
-						(int)customResolutionYInput->value());
-	} else {
-		std::string res = predefinedResolutionInput->value();
-		int split_index = res.find(RESOLUTION_SEPARATOR);
-		int x = atoi(res.substr(0, split_index).c_str());
-		int y = atoi(res.substr(split_index+1, res.length()).c_str());
-		set_resolution(this->engine_options, x, y);
+	EngineOptions_clearMods(this->engine_options.get());
+	int nitems = modsCheckBrowser->nitems();
+	for (int item = 1; item <= nitems; ++item) {
+		EngineOptions_pushMod(this->engine_options.get(), modsCheckBrowser->text(item));
 	}
 
-	auto currentResourceVersionIndex = gameVersionInput->value();
-	auto currentResourceVersion = predefinedVersions.at(currentResourceVersionIndex);
-	set_resource_version(this->engine_options, currentResourceVersion);
+	int x = (int)resolutionXInput->value();
+	int y = (int)resolutionYInput->value();
+	EngineOptions_setResolution(this->engine_options.get(), x, y);
 
-	auto currentScalingMode = scalingModes[this->scalingModeChoice->value()];
-	set_scaling_quality(this->engine_options, currentScalingMode);
+	int currentResourceVersionIndex = gameVersionInput->value();
+	GameVersion currentResourceVersion = predefinedVersions.at(currentResourceVersionIndex);
+	EngineOptions_setResourceVersion(this->engine_options.get(), currentResourceVersion);
 
-	bool success = write_engine_options(this->engine_options);
+	VideoScaleQuality currentScalingMode = scalingModes[this->scalingModeChoice->value()];
+	EngineOptions_setScalingQuality(this->engine_options.get(), currentScalingMode);
+
+	bool success = EngineOptions_write(this->engine_options.get());
 
 	if (success) {
-		SLOGD(LAUNCHER_TOPIC, "Succeeded writing config file");
+		update(false, nullptr);
+		SLOGD("Succeeded writing config file");
 		return 0;
 	}
-	SLOGD(LAUNCHER_TOPIC, "Failed writing config file");
+	SLOGD("Failed writing config file");
 	return 1;
 }
 
 void Launcher::populateChoices() {
+	RustPointer<VecCString> mods(findAvailableMods());
+	size_t nmods = VecCString_length(mods.get());
+	for (size_t i = 0; i < nmods; ++i) {
+		RustPointer<char> mod(VecCString_get(mods.get(), i));
+		addModMenuButton->insert(-1, mod.get(), 0, addMod, this, 0);
+	}
+
 	for(GameVersion version : predefinedVersions) {
-		auto resourceVersionString = get_resource_version_string(version);
-		gameVersionInput->add(resourceVersionString);
-		free_rust_string(resourceVersionString);
-    }
-	for (auto res : predefinedResolutions) {
+		RustPointer<char> resourceVersionString(VanillaVersion_toString(version));
+		gameVersionInput->add(resourceVersionString.get());
+	}
+	for (std::pair<int,int> res : predefinedResolutions) {
 		char resolutionString[255];
 		sprintf(resolutionString, "%dx%d", res.first, res.second);
-		predefinedResolutionInput->add(resolutionString);
+		predefinedResolutionMenuButton->insert(-1, resolutionString, 0, setPredefinedResolution, this, 0);
 	}
 
-	for (auto scalingMode : scalingModes) {
-		auto scalingModeString = get_scaling_quality_string(scalingMode);
-		this->scalingModeChoice->add(scalingModeString);
-		free_rust_string(scalingModeString);
+	for (VideoScaleQuality scalingMode : scalingModes) {
+		RustPointer<char> scalingModeString(ScalingQuality_toString(scalingMode));
+		this->scalingModeChoice->add(scalingModeString.get());
 	}
 }
 
-void Launcher::enablePredefinedResolutions() {
-	predefinedResolutionButton->value(1);
-	customResolutionButton->value(0);
-	customResolutionXInput->deactivate();
-	customResolutionYInput->deactivate();
-
-	predefinedResolutionInput->activate();
-}
-
-void Launcher::enableCustomResolutions() {
-	customResolutionButton->value(1);
-	predefinedResolutionButton->value(0);
-	predefinedResolutionInput->deactivate();
-
-	customResolutionXInput->activate();
-	customResolutionYInput->activate();
-}
-
-void Launcher::openDataDirectorySelector(Fl_Widget *btn, void *userdata) {
+void Launcher::openGameDirectorySelector(Fl_Widget *btn, void *userdata) {
 	Launcher* window = static_cast< Launcher* >( userdata );
 	Fl_Native_File_Chooser fnfc;
 	fnfc.title("Select the original Jagged Alliance 2 install directory");
 	fnfc.type(Fl_Native_File_Chooser::BROWSE_DIRECTORY);
-	fnfc.directory(window->dataDirectoryInput->value());
+	fnfc.directory(window->gameDirectoryInput->value());
 
 	switch ( fnfc.show() ) {
 		case -1:
@@ -198,29 +215,19 @@ void Launcher::openDataDirectorySelector(Fl_Widget *btn, void *userdata) {
 		case  1:
 			break; // CANCEL
 		default:
-			window->dataDirectoryInput->value(fnfc.filename());
+			window->gameDirectoryInput->value(fnfc.filename());
+			window->update(true, window->gameDirectoryInput);
 			break; // FILE CHOSEN
 	}
 }
 
-void Launcher::enablePredefinedResolutionSelection(Fl_Widget* btn, void* userdata) {
-	Launcher* window = static_cast< Launcher* >( userdata );
-	window->enablePredefinedResolutions();
-}
-
-void Launcher::enableCustomResolutionSelection(Fl_Widget* btn, void* userdata) {
-	Launcher* window = static_cast< Launcher* >( userdata );
-	window->enableCustomResolutions();
-}
-
 void Launcher::startExecutable(bool asEditor) {
 	// check minimal resolution:
-	if (customResolutionButton->value() &&
-		(customResolutionXInput->value() < 640 ||
-		customResolutionYInput->value() < 480)) {
+	if (resolutionIsInvalid()) {
+		fl_message_title("Invalid resolution");
 		fl_alert("Invalid custom resolution %dx%d.\nJA2 Stracciatella needs a resolution of at least 640x480.",
-			(int) customResolutionXInput->value(),
-			(int) customResolutionYInput->value());
+			(int) resolutionXInput->value(),
+			(int) resolutionYInput->value());
 		return;
 	}
 
@@ -230,13 +237,47 @@ void Launcher::startExecutable(bool asEditor) {
 		cmd += std::string(" -editor");
 	}
 
-	system(cmd.c_str());
+	int ret = system(cmd.c_str());
+	if (ret != 0)
+	{
+		SLOGW("There was an error while running '%s' (%d)", cmd.c_str(), ret);
+	}
+}
+
+bool Launcher::resolutionIsInvalid() {
+	return resolutionXInput->value() < 640 || resolutionYInput->value() < 480;
+}
+
+void Launcher::update(bool changed, Fl_Widget *widget) {
+	// invalid resolution warning
+	if (resolutionIsInvalid()) {
+		invalidResolutionLabel->show();
+	} else {
+		invalidResolutionLabel->hide();
+	}
+
+	// something changed indicator
+	if (changed && ja2JsonPathOutput->value()[0] != '*') {
+		std::string tmp("*"); // add '*'
+		tmp += ja2JsonPathOutput->value();
+		ja2JsonPathOutput->value(tmp.c_str());
+	} else if (!changed && ja2JsonPathOutput->value()[0] == '*') {
+		std::string tmp(ja2JsonPathOutput->value() + 1); // remove '*'
+		ja2JsonPathOutput->value(tmp.c_str());
+	}
 }
 
 void Launcher::startGame(Fl_Widget* btn, void* userdata) {
 	Launcher* window = static_cast< Launcher* >( userdata );
 
 	window->writeJsonFile();
+	if (!checkIfRelativePathExists(window->gameDirectoryInput->value(), "Data", true)) {
+		fl_message_title(window->playButton->label());
+		int choice = fl_choice("Data dir not found.\nAre you sure you want to continue?", "Stop", "Continue", 0);
+		if (choice != 1) {
+			return;
+		}
+	}
 	window->startExecutable(false);
 }
 
@@ -244,36 +285,175 @@ void Launcher::startEditor(Fl_Widget* btn, void* userdata) {
 	Launcher* window = static_cast< Launcher* >( userdata );
 
 	window->writeJsonFile();
+	bool has_editor_slf = checkIfRelativePathExists(window->gameDirectoryInput->value(), "Data/Editor.slf", true);
+	if (!has_editor_slf) {
+		RustPointer<char> assets_dir(findPathFromAssetsDir(nullptr, false, false));
+		if (assets_dir) {
+			// free editor.slf
+			has_editor_slf = checkIfRelativePathExists(assets_dir.get(), "editor.slf", true);
+		}
+	}
+	if (!has_editor_slf) {
+		fl_message_title(window->editorButton->label());
+		int choice = fl_choice("Editor.slf not found.\nAre you sure you want to continue?", "Stop", "Continue", 0);
+		if (choice != 1) {
+			return;
+		}
+	}
 	window->startExecutable(true);
 }
 
 void Launcher::guessVersion(Fl_Widget* btn, void* userdata) {
 	Launcher* window = static_cast< Launcher* >( userdata );
-	fl_message_title(window->guessVersionButton->label());
-	auto choice = fl_choice("Comparing resources packs can take a long time.\nAre you sure you want to continue?", "Stop", "Continue", 0);
+	fl_message_title("Guess Game Version");
+	int choice = fl_choice("Comparing resources packs can take a long time.\nAre you sure you want to continue?", "Stop", "Continue", 0);
 	if (choice != 1) {
 		return;
 	}
 
-	char* log = NULL;
-	auto gamedir = window->dataDirectoryInput->value();
-	auto guessedVersion = guess_resource_version(gamedir, &log);
-	printf("%s", log);
+	const char* gamedir = window->gameDirectoryInput->value();
+	int guessedVersion = guessResourceVersion(gamedir);
 	if (guessedVersion != -1) {
-		auto resourceVersionIndex = 0;
-		for (auto version : predefinedVersions) {
-			if (version == (VanillaVersion) guessedVersion) {
+		int resourceVersionIndex = 0;
+		for (GameVersion version : predefinedVersions) {
+			if (static_cast<int>(version) == guessedVersion) {
 				break;
 			}
 			resourceVersionIndex += 1;
 		}
 		window->gameVersionInput->value(resourceVersionIndex);
+		window->update(true, window->gameVersionInput);
 		fl_message_title(window->guessVersionButton->label());
 		fl_message("Success!");
 	} else {
 		fl_message_title(window->guessVersionButton->label());
 		fl_alert("Failure!");
 	}
-	free_rust_string(log);
 }
 
+void Launcher::setPredefinedResolution(Fl_Widget* btn, void* userdata) {
+	Fl_Menu_Button* menuBtn = static_cast< Fl_Menu_Button* >( btn );
+	Launcher* window = static_cast< Launcher* >( userdata );
+	std::string res = menuBtn->mvalue()->label();
+	size_t split_index = res.find(RESOLUTION_SEPARATOR);
+	int x = atoi(res.substr(0, split_index).c_str());
+	int y = atoi(res.substr(split_index+1, res.length()).c_str());
+	window->resolutionXInput->value(x);
+	window->resolutionYInput->value(y);
+	window->update(true, btn);
+}
+
+void Launcher::widgetChanged(Fl_Widget* widget, void* userdata) {
+	Launcher* window = static_cast< Launcher* >( userdata );
+	window->update(true, widget);
+}
+
+void Launcher::reloadJa2Json(Fl_Widget* widget, void* userdata) {
+	Launcher* window = static_cast< Launcher* >( userdata );
+	window->loadJa2Json();
+	window->initializeInputsFromDefaults();
+}
+
+void Launcher::saveJa2Json(Fl_Widget* widget, void* userdata) {
+	Launcher* window = static_cast< Launcher* >( userdata );
+	window->writeJsonFile();
+}
+
+void Launcher::addMod(Fl_Widget* widget, void* userdata) {
+	Fl_Menu_Button* menuButton = static_cast< Fl_Menu_Button* >( widget );
+	Launcher* window = static_cast< Launcher* >( userdata );
+
+	const char* mod = menuButton->mvalue()->label();
+	window->modsCheckBrowser->add(mod);
+	window->modsCheckBrowser->redraw();
+	window->update(true, widget);
+}
+
+void Launcher::moveUpMods(Fl_Widget* widget, void* userdata) {
+	Launcher* window = static_cast< Launcher* >( userdata );
+	int nitems = window->modsCheckBrowser->nitems();
+	int nchecked = window->modsCheckBrowser->nchecked();
+	if (nchecked == 0 || nchecked == nitems) {
+		return; // nothing to do
+	}
+
+	std::vector<int> order;
+	for (int item = 1; item <= nitems; ++item) {
+		if (window->modsCheckBrowser->checked(item)) {
+			if (!order.empty() && !window->modsCheckBrowser->checked(order.back())) {
+				order.insert(order.end() - 1, item); // move up
+				continue;
+			}
+		}
+		order.emplace_back(item);
+	}
+
+	std::vector<std::string> text;
+	std::vector<int> checked;
+	for (int item : order) {
+		text.emplace_back(window->modsCheckBrowser->text(item));
+		checked.emplace_back(window->modsCheckBrowser->checked(item));
+	}
+
+	window->modsCheckBrowser->clear();
+	for (int i = 0; i < nitems; ++i) {
+		window->modsCheckBrowser->add(text[i].c_str(), checked[i]);
+	}
+	window->update(true, widget);
+}
+
+void Launcher::moveDownMods(Fl_Widget* widget, void* userdata) {
+	Launcher* window = static_cast< Launcher* >( userdata );
+	int nitems = window->modsCheckBrowser->nitems();
+	int nchecked = window->modsCheckBrowser->nchecked();
+	if (nchecked == 0 || nchecked == nitems) {
+		return; // nothing to do
+	}
+
+	std::vector<int> order;
+	for (int item = nitems; item >= 1; --item) {
+		if (window->modsCheckBrowser->checked(item)) {
+			if (!order.empty() && !window->modsCheckBrowser->checked(order.back())) {
+				order.insert(order.end() - 1, item); // move down
+				continue;
+			}
+		}
+		order.emplace_back(item);
+	}
+	std::reverse(order.begin(), order.end());
+
+	std::vector<std::string> text;
+	std::vector<int> checked;
+	for (int item : order) {
+		text.emplace_back(window->modsCheckBrowser->text(item));
+		checked.emplace_back(window->modsCheckBrowser->checked(item));
+	}
+
+	window->modsCheckBrowser->clear();
+	for (int i = 0; i < nitems; ++i) {
+		window->modsCheckBrowser->add(text[i].c_str(), checked[i]);
+	}
+	window->update(true, widget);
+}
+
+void Launcher::removeMods(Fl_Widget* widget, void* userdata) {
+	Launcher* window = static_cast< Launcher* >( userdata );
+	int nchecked = window->modsCheckBrowser->nchecked();
+	if (nchecked == 0) {
+		return; // nothing to do
+	}
+
+	std::vector<std::string> text;
+	int nitems = window->modsCheckBrowser->nitems();
+	for (int item = 1; item <= nitems; ++item) {
+		if (!window->modsCheckBrowser->checked(item)) {
+			text.emplace_back(window->modsCheckBrowser->text(item));
+		}
+	}
+
+	window->modsCheckBrowser->clear();
+	for (size_t i = 0; i < text.size(); ++i) {
+		window->modsCheckBrowser->add(text[i].c_str());
+	}
+	window->update(true, widget);
+}

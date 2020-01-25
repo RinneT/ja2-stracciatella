@@ -14,6 +14,9 @@
 #include "Dialogue_Control.h"
 #include "Random.h"
 
+#include <algorithm>
+#include <iterator>
+
 
 // Room Information
 UINT8						gubWorldRoomInfo[ WORLD_MAX ];
@@ -22,8 +25,8 @@ UINT8						gubWorldRoomHidden[ MAX_ROOMS ];
 
 void InitRoomDatabase()
 {
-	memset( gubWorldRoomInfo, NO_ROOM, sizeof( gubWorldRoomInfo ) );
-	memset( gubWorldRoomHidden, TRUE, sizeof( gubWorldRoomHidden ) );
+	std::fill(std::begin(gubWorldRoomInfo), std::end(gubWorldRoomInfo), NO_ROOM);
+	std::fill(std::begin(gubWorldRoomHidden), std::end(gubWorldRoomHidden), TRUE);
 }
 
 
@@ -78,12 +81,12 @@ void SetGridNoRevealedFlag(UINT16 const grid_no)
 		SetStructAframeFlags(grid_no, LEVELNODE_HIDDEN);
 
 		// Find gridno one east as well
-		if (grid_no + WORLD_COLS < NOWHERE)
+		if (grid_no + WORLD_COLS < GRIDSIZE)
 		{
 			SetStructAframeFlags(grid_no + WORLD_COLS, LEVELNODE_HIDDEN);
 		}
 
-		if (grid_no + 1 < NOWHERE)
+		if (grid_no + 1 < GRIDSIZE)
 		{
 			SetStructAframeFlags(grid_no + 1, LEVELNODE_HIDDEN);
 		}

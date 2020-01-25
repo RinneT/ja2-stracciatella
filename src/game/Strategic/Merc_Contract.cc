@@ -293,7 +293,7 @@ BOOLEAN MercContractHandling(SOLDIERTYPE* const s, UINT8 const ubDesiredAction)
 
 		HandleImportantMercQuote(s, QUOTE_ACCEPT_CONTRACT_RENEWAL);
 
-		if (iCostOfInsurance > LaptopSaveInfo.iCurrentBalance)
+		if (iCostOfInsurance > LaptopSaveInfo.iCurrentBalance - contract_charge)
 		{
 			HandleNotifyPlayerCantAffordInsurance();
 
@@ -1044,7 +1044,7 @@ static BOOLEAN ContractIsGoingToExpireSoon(SOLDIERTYPE* pSoldier)
 
 TEST(MercContract, asserts)
 {
-	EXPECT_EQ(sizeof(CONTRACT_NEWAL_LIST_NODE), 4);
+	EXPECT_EQ(sizeof(CONTRACT_NEWAL_LIST_NODE), 4u);
 }
 
 #endif

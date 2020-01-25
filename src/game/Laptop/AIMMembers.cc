@@ -1211,7 +1211,7 @@ static INT8 AimMemberHireMerc(void)
 	ProfileID const pid = AimMercArray[gbCurrentIndex];
 
 	MERC_HIRE_STRUCT h;
-	memset(&h, 0, sizeof(h));
+	h = MERC_HIRE_STRUCT{};
 	h.ubProfileID               = pid;
 	h.sSectorX                  = SECTORX(g_merc_arrive_sector);
 	h.sSectorY                  = SECTORY(g_merc_arrive_sector);
@@ -1753,7 +1753,7 @@ void DisplayTextForMercFaceVideoPopUp(const wchar_t* const pString)
 	swprintf(gsTalkingMercText, lengthof(gsTalkingMercText), L"\"%ls\"", pString);
 
 	//Set the minimum time for the dialogue text to be present
-	usAimMercSpeechDuration =  wcslen( gsTalkingMercText ) * AIM_TEXT_SPEECH_MODIFIER;
+	usAimMercSpeechDuration = static_cast<UINT16>(wcslen( gsTalkingMercText ) * AIM_TEXT_SPEECH_MODIFIER);
 
 	if( usAimMercSpeechDuration < MINIMUM_TALKING_TIME_FOR_MERC )
 		usAimMercSpeechDuration = MINIMUM_TALKING_TIME_FOR_MERC;

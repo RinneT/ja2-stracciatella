@@ -313,7 +313,7 @@ static GUIButtonRef giHelpScreenScrollArrows[2];
 void InitHelpScreenSystem()
 {
 	//set some values
-	memset( &gHelpScreen, 0, sizeof( gHelpScreen ) );
+	gHelpScreen = HELP_SCREEN_STRUCT{};
 
 	//set it up so we can enter the screen
 	gfHelpScreenEntry = TRUE;
@@ -819,7 +819,7 @@ static void SetSizeAndPropertiesOfHelpScreen(void)
 			break;
 
 		default:
-			SLOGE(DEBUG_TAG_ASSERTS, "Error in help screen.");
+			SLOGA("Error in help screen.");
 			break;
 	}
 
@@ -976,7 +976,7 @@ static void HelpScreenSpecialExitCode(void)
 			break;
 
 		default:
-			SLOGE(DEBUG_TAG_ASSERTS, "Error in help screen.");
+			SLOGA("Error in help screen.");
 			break;
 	}
 }
@@ -1016,7 +1016,7 @@ static void SpecialHandlerCode(void)
 			break;
 
 		default:
-			SLOGE(DEBUG_TAG_ASSERTS, "Error in help screen: SpecialHandlerCode().");
+			SLOGA("Error in help screen: SpecialHandlerCode().");
 			break;
 	}
 }
@@ -1065,7 +1065,7 @@ static UINT16 RenderSpecificHelpScreen(void)
 
 		default:
 			SetFontDestBuffer(FRAME_BUFFER);
-			SLOGE(DEBUG_TAG_ASSERTS, "Error in help screen: RenderSpecificHelpScreen().");
+			SLOGA("Error in help screen: RenderSpecificHelpScreen().");
 			break;
 	}
 
@@ -1112,7 +1112,7 @@ static void DisplayCurrentScreenTitleAndFooter(void)
 		case HELP_SCREEN_LOAD_GAME:                  break;
 
 		default:
-			SLOGE(DEBUG_TAG_ASSERTS, "Error in help screen: DisplayCurrentScreenTitleAndFooter()." );
+			SLOGA("Error in help screen: DisplayCurrentScreenTitleAndFooter()." );
 			break;
 	}
 
@@ -1898,7 +1898,7 @@ static void ChangeTopLineInTextBufferByAmount(INT32 const delta)
 	if (new_top > max_top) new_top = max_top;
 	if (new_top < 0)       new_top = 0;
 
-	if (new_top == top) return;
+	if (static_cast<UINT32>(new_top) == top) return;
 
 	top                   = new_top;
 	hlp.ubHelpScreenDirty = HLP_SCRN_DRTY_LVL_REFRESH_TEXT;

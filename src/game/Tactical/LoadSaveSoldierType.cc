@@ -1,5 +1,3 @@
-#include <stdexcept>
-
 #include "Debug.h"
 #include "LoadSaveData.h"
 #include "LoadSaveObjectType.h"
@@ -7,6 +5,9 @@
 #include "Overhead.h"
 #include "Tactical_Save.h"
 #include "Types.h"
+
+#include <algorithm>
+#include <stdexcept>
 
 static UINT32 MercChecksum(SOLDIERTYPE const& s)
 {
@@ -40,7 +41,7 @@ void ExtractSoldierType(const BYTE* const data, SOLDIERTYPE* const s, bool strac
 	UINT16 usPathDataSize;
 	UINT16 usPathIndex;
 
-	memset(s, 0, sizeof(*s));
+	*s = SOLDIERTYPE{};
 
 	const BYTE* d = data;
 	EXTR_U8(d, s->ubID)
@@ -451,7 +452,7 @@ void ExtractSoldierType(const BYTE* const data, SOLDIERTYPE* const s, bool strac
 	EXTR_SKIP(d, 1)
 	EXTR_BOOL(d, s->fContractPriceHasIncreased)
 	EXTR_SKIP(d, 1)
-	EXTR_I32(d, s->iBurstSoundID)
+	EXTR_U32(d, s->uiBurstSoundID)
 	EXTR_BOOL(d, s->fFixingSAMSite)
 	EXTR_BOOL(d, s->fFixingRobot)
 	EXTR_I8(d, s->bSlotItemTakenFrom)
@@ -537,7 +538,7 @@ void ExtractSoldierType(const BYTE* const data, SOLDIERTYPE* const s, bool strac
 	EXTR_I8(d, s->bCorpseQuoteTolerance)
 	EXTR_SKIP(d, 1)
 	EXTR_I32(d, s->iPositionSndID)
-	EXTR_I32(d, s->iTuringSoundID)
+	EXTR_U32(d, s->uiTuringSoundID)
 	EXTR_U8(d, s->ubLastDamageReason)
 	EXTR_BOOL(d, s->fComplainedThatTired)
 	EXTR_I16A(d, s->sLastTwoLocations, lengthof(s->sLastTwoLocations))
@@ -732,6 +733,7 @@ void InjectSoldierType(BYTE* const data, const SOLDIERTYPE* const s)
 	// pathing info takes up 16 bit in the savegame but 8 bit in the engine
 	usPathDataSize = s->ubPathDataSize > MAX_PATH_LIST_SIZE ? (UINT16)MAX_PATH_LIST_SIZE : (UINT16)s->ubPathDataSize;
 	usPathIndex = (UINT16)s->ubPathIndex;
+	std::fill_n(usPathingData, MAX_PATH_LIST_SIZE, 0);
 	for (UINT8 i = 0; i < usPathDataSize; i++) {
 		usPathingData[i] = (UINT16)s->ubPathingData[i];
 	}
@@ -964,7 +966,7 @@ void InjectSoldierType(BYTE* const data, const SOLDIERTYPE* const s)
 	INJ_SKIP(d, 1)
 	INJ_BOOL(d, s->fContractPriceHasIncreased)
 	INJ_SKIP(d, 1)
-	INJ_I32(d, s->iBurstSoundID)
+	INJ_U32(d, s->uiBurstSoundID)
 	INJ_BOOL(d, s->fFixingSAMSite)
 	INJ_BOOL(d, s->fFixingRobot)
 	INJ_I8(d, s->bSlotItemTakenFrom)
@@ -1050,7 +1052,7 @@ void InjectSoldierType(BYTE* const data, const SOLDIERTYPE* const s)
 	INJ_I8(d, s->bCorpseQuoteTolerance)
 	INJ_SKIP(d, 1)
 	INJ_I32(d, s->iPositionSndID)
-	INJ_I32(d, s->iTuringSoundID)
+	INJ_U32(d, s->uiTuringSoundID)
 	INJ_U8(d, s->ubLastDamageReason)
 	INJ_BOOL(d, s->fComplainedThatTired)
 	INJ_I16A(d, s->sLastTwoLocations, lengthof(s->sLastTwoLocations))
