@@ -46,7 +46,8 @@
 #include "ContentManager.h"
 #include "GameInstance.h"
 #include "policy/GamePolicy.h"
-
+#include "externalized/strategic/BloodCatSpawnsModel.h"
+                 
 #include <algorithm>
 #include <iterator>
 #include <math.h>
@@ -144,7 +145,7 @@ try
 	if (guiCurrentScreen == AUTORESOLVE_SCREEN)
 	{
 		// We are creating a dynamically allocated soldier for autoresolve.
-		s  = MALLOC(SOLDIERTYPE);
+		s  = new SOLDIERTYPE{};
 		id = 255;
 	}
 	else
@@ -1001,7 +1002,7 @@ void InternalTacticalRemoveSoldier(SOLDIERTYPE& s, BOOLEAN const fRemoveVehicle)
 	else
 	{
 		if (gfPersistantPBI) DeleteSoldier(s);
-		MemFree(&s);
+		delete &s;
 	}
 }
 
@@ -1309,7 +1310,8 @@ void CreateDetailedPlacementGivenBasicPlacementInfo( SOLDIERCREATE_STRUCT *pp, B
 
 				case BLOODCAT:
 					pp->bExpLevel = 5 + bExpLevelModifier;
-					if( SECTOR( gWorldSectorX, gWorldSectorY ) == SEC_I16 )
+					auto spawns = GCM->getBloodCatSpawnsOfSector( SECTOR( gWorldSectorX, gWorldSectorY ));
+					if( spawns != NULL && spawns->isLair )  
 					{
 						pp->bExpLevel += gGameOptions.ubDifficultyLevel;
 					}
@@ -1734,7 +1736,7 @@ try
 				s->sGridNo = NOWHERE;
 
 				//Allocate and copy the soldier
-				SOLDIERTYPE* const pSoldier = MALLOC(SOLDIERTYPE);
+				SOLDIERTYPE* const pSoldier = new SOLDIERTYPE{};
 				*pSoldier = *s;
 
 				//Assign a bogus ID, then return it

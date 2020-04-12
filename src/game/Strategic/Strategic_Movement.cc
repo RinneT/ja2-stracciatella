@@ -54,6 +54,10 @@
 #include <iterator>
 #include <stdexcept>
 
+#include "GameInstance.h"
+#include "ContentManager.h"
+#include "externalized/strategic/BloodCatSpawnsModel.h"
+
 // the delay for a group about to arrive
 #define ABOUT_TO_ARRIVE_DELAY 5
 
@@ -115,7 +119,7 @@ GROUP* CreateNewPlayerGroupDepartingFromSector(UINT8 const ubSectorX, UINT8 cons
 {
 	AssertMsg( ubSectorX >= 1 && ubSectorX <= 16, String( "CreateNewPlayerGroup with out of range sectorX value of %d", ubSectorX ) );
 	AssertMsg( ubSectorY >= 1 && ubSectorY <= 16, String( "CreateNewPlayerGroup with out of range sectorY value of %d", ubSectorY ) );
-	GROUP* const pNew = MALLOCZ(GROUP);
+	GROUP* const pNew = new GROUP{};
 	pNew->pPlayerList = NULL;
 	pNew->pWaypoints = NULL;
 	pNew->ubSectorX = pNew->ubNextX = ubSectorX;
@@ -138,7 +142,7 @@ GROUP* CreateNewVehicleGroupDepartingFromSector(UINT8 const ubSectorX, UINT8 con
 {
 	AssertMsg( ubSectorX >= 1 && ubSectorX <= 16, String( "CreateNewVehicleGroup with out of range sectorX value of %d", ubSectorX ) );
 	AssertMsg( ubSectorY >= 1 && ubSectorY <= 16, String( "CreateNewVehicleGroup with out of range sectorY value of %d", ubSectorY ) );
-	GROUP* const pNew = MALLOCZ(GROUP);
+	GROUP* const pNew = new GROUP{};
 	pNew->pWaypoints = NULL;
 	pNew->ubSectorX = pNew->ubNextX = ubSectorX;
 	pNew->ubSectorY = pNew->ubNextY = ubSectorY;
@@ -163,7 +167,7 @@ void AddPlayerToGroup(GROUP& g, SOLDIERTYPE& s)
 {
 	AssertMsg(g.fPlayer, "Attempting AddPlayerToGroup() on an ENEMY group!");
 
-	PLAYERGROUP* const p = MALLOC(PLAYERGROUP);
+	PLAYERGROUP* const p = new PLAYERGROUP{};
 	p->pSoldier = &s;
 	p->next     = 0;
 
@@ -206,7 +210,7 @@ void RemovePlayerFromPGroup(GROUP& g, SOLDIERTYPE& s)
 		if (p->pSoldier != &s) continue;
 
 		*i = p->next;
-		MemFree(p);
+		delete p;
 
 		s.ubPrevSectorID = SECTOR(g.ubPrevX, g.ubPrevY);
 		s.ubGroupID      = 0;
@@ -434,7 +438,7 @@ BOOLEAN AddWaypointToPGroup(GROUP* const g, UINT8 const x, UINT8 const y) // Sam
 		Assert(n_aligned_axes == 1);
 	}
 
-	WAYPOINT* const new_wp = MALLOC(WAYPOINT);
+	WAYPOINT* const new_wp = new WAYPOINT{};
 	new_wp->x    = x;
 	new_wp->y    = y;
 	new_wp->next = 0;
@@ -494,8 +498,8 @@ BOOLEAN AddWaypointStrategicIDToPGroup( GROUP *pGroup, UINT32 uiSectorID )
 GROUP* CreateNewEnemyGroupDepartingFromSector( UINT32 uiSector, UINT8 ubNumAdmins, UINT8 ubNumTroops, UINT8 ubNumElites )
 {
 	AssertMsg( uiSector >= 0 && uiSector <= 255, String( "CreateNewEnemyGroup with out of range value of %d", uiSector ) );
-	GROUP* const pNew = MALLOCZ(GROUP);
-	pNew->pEnemyGroup = MALLOCZ(ENEMYGROUP);
+	GROUP* const pNew = new GROUP{};
+	pNew->pEnemyGroup = new ENEMYGROUP{};
 	pNew->pWaypoints = NULL;
 	pNew->ubSectorX = (UINT8)SECTORX( uiSector );
 	pNew->ubSectorY = (UINT8)SECTORY( uiSector );
@@ -565,7 +569,7 @@ static void RemoveGroupFromList(GROUP* const g)
 		Assert(uniqueIDMask[index] & mask);
 		uniqueIDMask[index] &= ~mask;
 
-		MemFree(g);
+		delete g;
 		return;
 	}
 	SLOGA("Trying to remove a strategic group that isn't in the list!");
@@ -1366,7 +1370,8 @@ void GroupArrivedAtSector(GROUP& g, BOOLEAN const check_for_battle, BOOLEAN cons
 			if (!g.fVehicle || !IsGroupTheHelicopterGroup(g))
 			{
 				// ATE: Add a few corpse to the bloodcat lair
-				if (SECTOR(x, y) == SEC_I16 &&
+				auto spawns = GCM->getBloodCatSpawnsOfSector( SECTOR(x, y) );
+				if ( spawns != NULL && spawns->isLair &&
 					!GetSectorFlagStatus(x, y, z, SF_ALREADY_VISITED))
 				{
 					AddCorpsesToBloodcatLair(x, y);
@@ -1863,7 +1868,7 @@ void RemoveGroupWaypoints(GROUP& g)
 	{
 		WAYPOINT* const del = i;
 		i = i->next;
-		MemFree(del);
+		delete del;
 	}
 
 	g.ubNextWaypointID = 0;
@@ -1903,13 +1908,13 @@ void RemoveGroup(GROUP& g)
 		{
 			PLAYERGROUP* const pPlayer = g.pPlayerList;
 			g.pPlayerList = g.pPlayerList->next;
-			MemFree(pPlayer);
+			delete pPlayer;
 		}
 	}
 	else
 	{
 		RemoveGroupFromStrategicAILists(g);
-		MemFree(g.pEnemyGroup);
+		delete g.pEnemyGroup;
 	}
 
 	RemoveGroupFromList(&g);
@@ -2546,7 +2551,7 @@ void LoadStrategicMovementGroupsFromSavedGameFile(HWFILE const f)
 	GROUP** anchor = &gpGroupList;
 	for (UINT32 i = uiNumberOfGroups; i != 0; --i)
 	{
-		GROUP* const g = MALLOCZ(GROUP);
+		GROUP* const g = new GROUP{};
 
 		BYTE data[84];
 		FileRead(f, data, sizeof(data));
@@ -2642,7 +2647,7 @@ static void LoadPlayerGroupList(HWFILE const f, GROUP* const g)
 	PLAYERGROUP** anchor = &g->pPlayerList;
 	for (UINT32 i = node_count; i != 0; --i)
 	{
-		PLAYERGROUP* const pg = MALLOC(PLAYERGROUP);
+		PLAYERGROUP* const pg = new PLAYERGROUP{};
 
 		UINT32 profile_id;
 		FileRead(f, &profile_id, sizeof(UINT32));
@@ -2687,7 +2692,7 @@ static void LoadEnemyGroupStructFromSavedGame(HWFILE const f, GROUP& g)
 	BYTE data[29];
 	FileRead(f, data, sizeof(data));
 
-	ENEMYGROUP* const eg = MALLOCZ(ENEMYGROUP);
+	ENEMYGROUP* const eg = new ENEMYGROUP{};
 	BYTE*             d  = data;
 	EXTR_U8(  d, eg->ubNumTroops)
 	EXTR_U8(  d, eg->ubNumElites)
@@ -2738,7 +2743,7 @@ static void LoadWayPointList(HWFILE const f, GROUP* const g)
 	WAYPOINT** anchor = &g->pWaypoints;
 	for (UINT32 i = uiNumberOfWayPoints; i != 0; --i)
 	{
-		WAYPOINT* const w = MALLOCZ(WAYPOINT);
+		WAYPOINT* const w = new WAYPOINT{};
 
 		BYTE data[8];
 		FileRead(f, data, sizeof(data));
@@ -3348,8 +3353,15 @@ static BOOLEAN TestForBloodcatAmbush(GROUP const* const pGroup)
 
 	ubChance = 5 * gGameOptions.ubDifficultyLevel;
 
+	bool bIsLair = false, bIsArena = false;
+	auto spawns = GCM->getBloodCatSpawnsOfSector( ubSectorID );
+	if (spawns != NULL) {
+		bIsLair = spawns->isLair;   // SEC_I16
+		bIsArena = spawns->isArena; // SEC_N5
+	}
+
 	iHoursElapsed = (GetWorldTotalMin() - pSector->uiTimeCurrentSectorWasLastLoaded) / 60;
-	if( ubSectorID == SEC_N5 || ubSectorID == SEC_I16 )
+	if( bIsLair || bIsArena )
 	{ //These are special maps -- we use all placements.
 		if( pSector->bBloodCats == -1 )
 		{
@@ -3390,7 +3402,7 @@ static BOOLEAN TestForBloodcatAmbush(GROUP const* const pGroup)
 			pSector->bBloodCats = (INT8)MIN( pSector->bBloodCats, pSector->bBloodCatPlacements );
 		}
 	}
-	else if( ubSectorID != SEC_I16 )
+	else if( !bIsLair )
 	{
 		if( !gfAutoAmbush && PreChance( 95 ) )
 		{ //already ambushed here.  But 5% chance of getting ambushed again!
@@ -3398,10 +3410,10 @@ static BOOLEAN TestForBloodcatAmbush(GROUP const* const pGroup)
 		}
 	}
 
-	if( !fAlreadyAmbushed && ubSectorID != SEC_N5 && pSector->bBloodCats > 0 &&
+	if( !fAlreadyAmbushed && !bIsArena && pSector->bBloodCats > 0 &&
 			!pGroup->fVehicle && !NumEnemiesInSector( pGroup->ubSectorX, pGroup->ubSectorY ) )
 	{
-		if( ubSectorID != SEC_I16 || !gubFact[ FACT_PLAYER_KNOWS_ABOUT_BLOODCAT_LAIR ] )
+		if( !bIsLair || !gubFact[ FACT_PLAYER_KNOWS_ABOUT_BLOODCAT_LAIR ] )
 		{
 			gubEnemyEncounterCode = BLOODCAT_AMBUSH_CODE;
 		}

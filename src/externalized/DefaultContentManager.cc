@@ -27,6 +27,8 @@
 #include "WeaponModels.h"
 #include "policy/DefaultGamePolicy.h"
 #include "policy/DefaultIMPPolicy.h"
+#include "strategic/BloodCatPlacementsModel.h"
+#include "strategic/BloodCatSpawnsModel.h"
 
 #include "Logger.h"
 
@@ -54,7 +56,7 @@ static void LoadEncryptedData(STRING_ENC_TYPE encType, SGPFile* const File, wcha
 {
 	FileSeek(File, seek_chars * 2, FILE_SEEK_FROM_START);
 
-	UINT16 *Str = MALLOCN(UINT16, read_chars);
+	UINT16 *Str = new UINT16[read_chars]{};
 	FileRead(File, Str, sizeof(UINT16) * read_chars);
 
 	Str[read_chars - 1] = '\0';
@@ -136,7 +138,7 @@ static void LoadEncryptedData(STRING_ENC_TYPE encType, SGPFile* const File, wcha
 		*DestString++ = c;
 	}
 	*DestString = L'\0';
-	MemFree(Str);
+	delete[] Str;
 }
 
 DefaultContentManager::DefaultContentManager(GameVersion gameVersion,
@@ -268,6 +270,9 @@ DefaultContentManager::~DefaultContentManager()
 	{
 		delete str;
 	}
+
+	m_bloodCatPlacements.clear();
+	m_bloodCatSpawns.clear();
 }
 
 const DealerInventory* DefaultContentManager::getBobbyRayNewInventory() const
@@ -376,12 +381,15 @@ SGPFile* DefaultContentManager::openTempFileForAppend(const char* filename) cons
 SGPFile* DefaultContentManager::openTempFileForReading(const char* filename) const
 {
 	std::string path = FileMan::joinPaths(NEW_TEMP_DIR, filename);
-
-	int         mode;
-	const char* fmode = GetFileOpenModeForReading(&mode);
-
-	int d = FileMan::openFileForReading(path.c_str(), mode);
-	return FileMan::getSGPFileFromFD(d, path.c_str(), fmode);
+	RustPointer<File> file(File_open(path.c_str(), FILE_OPEN_READ));
+	if (!file)
+	{
+		RustPointer<char> err(getRustError());
+		char buf[128];
+		snprintf(buf, sizeof(buf), "DefaultContentManager::openTempFileForReading: %s", err.get());
+		throw std::runtime_error(buf);
+	}
+	return FileMan::getSGPFileFromFile(file.release());
 }
 
 /** Delete temporary file. */
@@ -400,23 +408,20 @@ void DefaultContentManager::deleteTempFile(const char* filename) const
  * If file is not found, try to find the file in libraries located in 'Data' directory; */
 SGPFile* DefaultContentManager::openGameResForReading(const char* filename) const
 {
-	int         mode;
-	const char* fmode = GetFileOpenModeForReading(&mode);
-
-	int d = FileMan::openFileCaseInsensitive(m_externalizedDataPath, filename, mode);
-	if (d >= 0)
+	RustPointer<File> file = FileMan::openFileCaseInsensitive(m_externalizedDataPath, filename, FILE_OPEN_READ);
+	if (file)
 	{
-		return FileMan::getSGPFileFromFD(d, filename, fmode);
+		return FileMan::getSGPFileFromFile(file.release());
 	}
 	else
 	{
-		d = FileMan::openFileForReading(filename, mode);
-		if (d < 0)
+		file = FileMan::openFileForReading(filename);
+		if (!file)
 		{
 			// failed to open file in the local directory
 			// let's try Data
-			d = FileMan::openFileCaseInsensitive(m_dataDir, filename, mode);
-			if (d < 0)
+			file = FileMan::openFileCaseInsensitive(m_dataDir, filename, FILE_OPEN_READ);
+			if (!file)
 			{
 				// failed to open in the data dir
 				// let's try libraries
@@ -425,7 +430,7 @@ SGPFile* DefaultContentManager::openGameResForReading(const char* filename) cons
 				if (libFile)
 				{
 					SLOGD("Opened file (from library ): %s", filename);
-					SGPFile *file = MALLOCZ(SGPFile);
+					SGPFile *file = new SGPFile{};
 					file->flags = SGPFILE_NONE;
 					file->u.lib = libFile.release();
 					return file;
@@ -441,18 +446,28 @@ SGPFile* DefaultContentManager::openGameResForReading(const char* filename) cons
 			SLOGD("Opened file (current dir  ): %s", filename);
 		}
 	}
-
-	return FileMan::getSGPFileFromFD(d, filename, fmode);
+	if (!file)
+	{
+		RustPointer<char> err(getRustError());
+		char buf[128];
+		snprintf(buf, sizeof(buf), "DefaultContentManager::openGameResForReading: %s", err.get());
+		throw std::runtime_error(buf);
+	}
+	return FileMan::getSGPFileFromFile(file.release());
 }
 
 /** Open user's private file (e.g. saved game, settings) for reading. */
 SGPFile* DefaultContentManager::openUserPrivateFileForReading(const std::string& filename) const
 {
-	int         mode;
-	const char* fmode = GetFileOpenModeForReading(&mode);
-
-	int d = FileMan::openFileForReading(filename.c_str(), mode);
-	return FileMan::getSGPFileFromFD(d, filename.c_str(), fmode);
+	RustPointer<File> file = FileMan::openFileForReading(filename.c_str());
+	if (!file)
+	{
+		RustPointer<char> err(getRustError());
+		char buf[128];
+		snprintf(buf, sizeof(buf), "DefaultContentManager::openUserPrivateFileForReading: %s", err.get());
+		throw std::runtime_error(buf);
+	}
+	return FileMan::getSGPFileFromFile(file.release());
 }
 
 SGPFile* DefaultContentManager::openGameResForReading(const std::string& filename) const
@@ -469,12 +484,12 @@ bool DefaultContentManager::doesGameResExists(char const* filename) const
 	}
 	else
 	{
-		FILE* file = fopen(filename, "rb");
+		RustPointer<File> file(File_open(filename, FILE_OPEN_READ));
 		if (!file)
 		{
 			char path[512];
 			snprintf(path, lengthof(path), "%s/%s", m_dataDir.c_str(), filename);
-			file = fopen(path, "rb");
+			file.reset(File_open(path, FILE_OPEN_READ));
 			if (!file)
 			{
 				RustPointer<LibraryFile> libFile(LibraryFile_open(m_libraryDB.get(), filename));
@@ -482,7 +497,6 @@ bool DefaultContentManager::doesGameResExists(char const* filename) const
 			}
 		}
 
-		fclose(file);
 		return true;
 	}
 }
@@ -918,6 +932,8 @@ bool DefaultContentManager::loadGameData()
 
 	loadStringRes("strings/new-strings", m_newStrings);
 
+	loadStrategicLayerData();
+
 	return result;
 }
 
@@ -1024,4 +1040,46 @@ const ST::string* DefaultContentManager::getNewString(size_t stringId) const
 	{
 		return m_newStrings[stringId];
 	}
+}
+
+
+bool DefaultContentManager::loadStrategicLayerData() {
+	auto json = readJsonDataFile("strategic-bloodcat-placements.json");
+	for (auto& element : json->GetArray()) {
+		auto obj = JsonObjectReader(element);
+		m_bloodCatPlacements.push_back(
+			BloodCatPlacementsModel::deserialize(obj)
+		);
+	}
+
+	json = readJsonDataFile("strategic-bloodcat-spawns.json");
+	for (auto& element : json->GetArray()) {
+		auto obj = JsonObjectReader(element);
+		m_bloodCatSpawns.push_back(
+			BloodCatSpawnsModel::deserialize(obj)
+		);
+	}
+	return true;
+}
+
+const std::vector<const BloodCatPlacementsModel*>& DefaultContentManager::getBloodCatPlacements() const
+{
+	return m_bloodCatPlacements;
+}
+
+const std::vector<const BloodCatSpawnsModel*>& DefaultContentManager::getBloodCatSpawns() const
+{
+	return m_bloodCatSpawns;
+}
+
+const BloodCatSpawnsModel* DefaultContentManager::getBloodCatSpawnsOfSector(uint8_t sectorId) const
+{
+	for ( auto spawns : m_bloodCatSpawns )
+	{
+		if ( spawns->sectorId == sectorId )
+		{
+			return spawns;
+		}
+	}
+	return NULL;
 }

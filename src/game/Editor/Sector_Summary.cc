@@ -45,6 +45,7 @@
 #include "Logger.h"
 
 #include <algorithm>
+#include <vector>
 
 #define DEVINFO_DIR "../DevInfo"
 
@@ -147,8 +148,7 @@ static UINT8 gubSummaryItemMode = ITEMMODE_SCIFI;
 
 static BOOLEAN gfItemDetailsMode = FALSE;
 
-static WORLDITEM*  gpWorldItemsSummaryArray       = 0;
-static UINT16      gusWorldItemsSummaryArraySize  = 0;
+static std::vector<WORLDITEM> gpWorldItemsSummaryArray;
 static OBJECTTYPE* gpPEnemyItemsSummaryArray      = 0;
 static UINT16      gusPEnemyItemsSummaryArraySize = 0;
 static OBJECTTYPE* gpNEnemyItemsSummaryArray      = 0;
@@ -402,11 +402,10 @@ void DestroySummaryWindow()
 	EnableEditorTaskbar();
 	EnableAllTextFields();
 
-	FreeNull(gpWorldItemsSummaryArray);
-	gusWorldItemsSummaryArraySize = 0;
-	FreeNull(gpPEnemyItemsSummaryArray);
+	gpWorldItemsSummaryArray.clear();
+	FreeNullArray(gpPEnemyItemsSummaryArray);
 	gusPEnemyItemsSummaryArraySize = 0;
-	FreeNull(gpNEnemyItemsSummaryArray);
+	FreeNullArray(gpNEnemyItemsSummaryArray);
 	gusNEnemyItemsSummaryArraySize = 0;
 
 	if (gfWorldLoaded) gfConfirmExitFirst = TRUE;
@@ -612,7 +611,8 @@ static void RenderItemDetails(void)
 			uiQuantity = 0;
 			uiExistChance = 0;
 			uiStatus = 0;
-			for( i = 0; i < gusWorldItemsSummaryArraySize; i++ )
+			Assert(gpWorldItemsSummaryArray.size() <= INT32_MAX);
+			for (i = 0; i < static_cast<INT32>(gpWorldItemsSummaryArray.size()); i++)
 			{
 				if( index == SWITCH || index == ACTION_ITEM )
 				{
@@ -1755,14 +1755,15 @@ static void CreateGlobalSummary(void)
 	FileMan::createDir(DEVINFO_DIR);
 
 	// Generate a simple readme file.
-	FILE* const f = fopen(DEVINFO_DIR "/readme.txt", "w");
-	Assert(f);
-	fputs(
+	const char* readme = ""
 		"This information is used in conjunction with the editor.\n"
-		"This directory or its contents shouldn't be included with final release.\n",
-		f
-	);
-	fclose(f);
+		"This directory or its contents shouldn't be included with final release.\n";
+	if (!Fs_write(DEVINFO_DIR "/readme.txt", reinterpret_cast<const uint8_t*>(readme), strlen(readme)))
+	{
+		RustPointer<char> err(getRustError());
+		SLOGA("CreateGlobalSummary: %s", err.get());
+		return;
+	}
 
 	LoadGlobalSummary();
 	RegenerateSummaryInfoForAllOutdatedMaps();
@@ -1863,12 +1864,7 @@ static void MapClickCallback(MOUSE_REGION* reg, INT32 reason)
 					gpCurrentSectorSummary = gpSectorSummary[ gsSelSectorX - 1 ][ gsSelSectorY - 1 ][ 7 ];
 					break;
 			}
-			if( gpWorldItemsSummaryArray )
-			{
-				MemFree( gpWorldItemsSummaryArray );
-				gpWorldItemsSummaryArray = NULL;
-				gusWorldItemsSummaryArraySize = 0;
-			}
+			gpWorldItemsSummaryArray.clear();
 			if( gfItemDetailsMode )
 			{
 				if( gpCurrentSectorSummary )
@@ -2085,8 +2081,8 @@ static BOOLEAN LoadSummary(const INT32 x, const INT32 y, const UINT8 level, cons
 		FileRead(f_map, &dMajorMapVersion, sizeof(FLOAT));
 	}
 
-	FILE* const f_sum = fopen(summary_filename, "rb");
-	if (!f_sum)
+	RustPointer<File> file(File_open(summary_filename, FILE_OPEN_READ));
+	if (!file)
 	{
 		++gusNumEntriesWithOutdatedOrNoSummaryInfo;
 	}
@@ -2094,13 +2090,13 @@ static BOOLEAN LoadSummary(const INT32 x, const INT32 y, const UINT8 level, cons
 	{
 		/* Even if the info is outdated (but existing), allocate the structure, but
 		 * indicate that the info is bad. */
-		SUMMARYFILE* const sum = MALLOC(SUMMARYFILE);
-		if (fread(sum, sizeof(SUMMARYFILE), 1, f_sum) != 1)
+		SUMMARYFILE* const sum = new SUMMARYFILE{};
+		if (!File_readExact(file.get(), reinterpret_cast<uint8_t*>(sum), sizeof(SUMMARYFILE)))
 		{
 			// failed, initialize and force update
 			*sum = SUMMARYFILE{};
 		}
-		fclose(f_sum);
+		file.reset(nullptr);
 
 		if (sum->ubSummaryVersion < MINIMUMVERSION ||
 				dMajorMapVersion      < getMajorMapVersion())
@@ -2112,7 +2108,7 @@ static BOOLEAN LoadSummary(const INT32 x, const INT32 y, const UINT8 level, cons
 		UpdateSummaryInfo(sum);
 
 		SUMMARYFILE** const anchor = &gpSectorSummary[x][y][level];
-		if (*anchor) MemFree(*anchor);
+		if (*anchor) delete *anchor;
 		*anchor = sum;
 
 		if (sum->ubSummaryVersion < GLOBAL_SUMMARY_VERSION)
@@ -2181,10 +2177,12 @@ void WriteSectorSummaryUpdate(const char* const filename, const UINT8 ubLevel, S
 	STRING512 summary_filename;
 	snprintf(summary_filename, lengthof(summary_filename), DEVINFO_DIR "/%.*s.sum", (int)(ext - filename), filename);
 
-	FILE* const f = fopen(summary_filename, "wb");
-	Assert(f);
-	fwrite(sf, sizeof(*sf), 1, f);
-	fclose(f);
+	if (!Fs_write(summary_filename, reinterpret_cast<const uint8_t*>(sf), sizeof(*sf)))
+	{
+		RustPointer<char> err(getRustError());
+		SLOGA("WriteSectorSummaryUpdate: %s", err.get());
+		return;
+	}
 
 	--gusNumEntriesWithOutdatedOrNoSummaryInfo;
 	UpdateMasterProgress();
@@ -2341,7 +2339,7 @@ static void SummaryUpdateCallback(GUI_BUTTON* btn, INT32 reason)
 
 		if( gpCurrentSectorSummary )
 		{
-			MemFree( gpCurrentSectorSummary );
+			delete gpCurrentSectorSummary;
 			gpCurrentSectorSummary = NULL;
 		}
 
@@ -2509,21 +2507,16 @@ static void SetupItemDetailsMode(BOOLEAN fAllowRecursion)
 	UINT16 usPEnemyIndex, usNEnemyIndex;
 
 	//Clear memory for all the item summaries loaded
-	if( gpWorldItemsSummaryArray )
-	{
-		MemFree( gpWorldItemsSummaryArray );
-		gpWorldItemsSummaryArray = NULL;
-		gusWorldItemsSummaryArraySize = 0;
-	}
+	gpWorldItemsSummaryArray.clear();
 	if( gpPEnemyItemsSummaryArray )
 	{
-		MemFree( gpPEnemyItemsSummaryArray );
+		delete[] gpPEnemyItemsSummaryArray;
 		gpPEnemyItemsSummaryArray = NULL;
 		gusPEnemyItemsSummaryArraySize = 0;
 	}
 	if( gpNEnemyItemsSummaryArray )
 	{
-		MemFree( gpNEnemyItemsSummaryArray );
+		delete[] gpNEnemyItemsSummaryArray;
 		gpNEnemyItemsSummaryArray = NULL;
 		gusNEnemyItemsSummaryArraySize = 0;
 	}
@@ -2554,11 +2547,11 @@ static void SetupItemDetailsMode(BOOLEAN fAllowRecursion)
 	ShowButton( iSummaryButton[ SUMMARY_SCIFI ] );
 	ShowButton( iSummaryButton[ SUMMARY_REAL ] );
 	ShowButton( iSummaryButton[ SUMMARY_ENEMY ] );
-	gusWorldItemsSummaryArraySize = gpCurrentSectorSummary->usNumItems;
-	if (gusWorldItemsSummaryArraySize != 0)
+	Assert(uiNumItems == gpCurrentSectorSummary->usNumItems);
+	if (gpCurrentSectorSummary->usNumItems != 0)
 	{
-		gpWorldItemsSummaryArray = MALLOCN(WORLDITEM, uiNumItems);
-		FileRead(hfile, gpWorldItemsSummaryArray, sizeof(WORLDITEM) * uiNumItems);
+		gpWorldItemsSummaryArray.assign(uiNumItems, WORLDITEM{});
+		FileRead(hfile, gpWorldItemsSummaryArray.data(), sizeof(WORLDITEM) * uiNumItems);
 	}
 
 	//NOW, do the enemy's items!
@@ -2611,11 +2604,11 @@ static void SetupItemDetailsMode(BOOLEAN fAllowRecursion)
 	//Pass 1 completed, so now allocate enough space to hold all the items
 	if( gusPEnemyItemsSummaryArraySize )
 	{
-		gpPEnemyItemsSummaryArray = MALLOCNZ(OBJECTTYPE, gusPEnemyItemsSummaryArraySize);
+		gpPEnemyItemsSummaryArray = new OBJECTTYPE[gusPEnemyItemsSummaryArraySize]{};
 	}
 	if( gusNEnemyItemsSummaryArraySize )
 	{
-		gpNEnemyItemsSummaryArray = MALLOCNZ(OBJECTTYPE, gusNEnemyItemsSummaryArraySize);
+		gpNEnemyItemsSummaryArray = new OBJECTTYPE[gusNEnemyItemsSummaryArraySize]{};
 	}
 
 	//PASS #2
